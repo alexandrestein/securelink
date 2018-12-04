@@ -49,6 +49,7 @@ func TestToken(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			defer s.Close()
 
 			var token string
 			token, err = s.GetToken()

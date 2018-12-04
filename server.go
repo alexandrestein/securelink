@@ -25,10 +25,6 @@ type (
 
 		getHostNameFromAddr FuncGetHostNameFromAddr
 	}
-
-	closedConn struct {
-		net.Conn
-	}
 )
 
 // NewServer builds a new server. Provide the port you want the server to listen on.
@@ -81,15 +77,7 @@ func NewServer(port uint16, tlsConfig *tls.Config, cert *Certificate, getHostNam
 
 // Accept implements the net.Listener interface
 func (s *Server) Accept() (net.Conn, error) {
-	fnErr := func(conn net.Conn, err error) (net.Conn, error) {
-		fmt.Println("print error from (s *Server) Accept()", err)
-		if conn != nil {
-			conn.Close()
-			return conn, nil
-		}
-		return conn, nil
-	}
-
+waitForNewConn:
 	conn, err := s.TLSListener.Accept()
 	if err != nil {
 		return nil, err
@@ -97,12 +85,12 @@ func (s *Server) Accept() (net.Conn, error) {
 
 	tlsConn, ok := conn.(*tls.Conn)
 	if !ok {
-		return fnErr(conn, fmt.Errorf("the connection is not TLS"))
+		goto waitForNewConn
 	}
 
 	err = tlsConn.Handshake()
 	if err != nil {
-		return fnErr(conn, err)
+		goto waitForNewConn
 	}
 
 	tc, _ := newTransportConn(conn, true)
@@ -110,12 +98,10 @@ func (s *Server) Accept() (net.Conn, error) {
 	if tlsConn.ConnectionState().ServerName != "" {
 		for _, service := range s.Handlers {
 			if service.Match(tc.ConnectionState().ServerName) {
-				// if service.matchFunction(tc.ConnectionState().ServerName) {
-				service.Handle(tc)
-
-				// closedConn :=
-
-				return &closedConn{conn}, nil
+				// Gives the hand to the regestred service
+				go service.Handle(tc)
+				// And go wait for the next connection
+				goto waitForNewConn
 			}
 		}
 	}
@@ -125,6 +111,13 @@ func (s *Server) Accept() (net.Conn, error) {
 
 // Close implements the net.Listener interface
 func (s *Server) Close() error {
+	defer s.Echo.Close()
+	defer s.TLSListener.Close()
+
+	err := s.Echo.Close()
+	if err != nil {
+		return err
+	}
 	return s.TLSListener.Close()
 }
 
@@ -158,14 +151,4 @@ func (s *Server) Dial(addr, hostNamePrefix string, timeout time.Duration) (net.C
 	}
 
 	return NewServiceConnector(addr, hostName, s.Certificate, timeout)
-}
-
-func (cc *closedConn) Read(b []byte) (n int, err error) {
-	return 0, cc.error()
-}
-func (cc *closedConn) Write(b []byte) (n int, err error) {
-	return 0, cc.error()
-}
-func (cc *closedConn) error() error {
-	return fmt.Errorf("handeled")
 }

@@ -209,8 +209,6 @@ func httpFallback(t *testing.T) {
 		return c.String(200, "OK")
 	})
 
-	// time.Sleep(time.Minute)
-
 	cli := securelink.NewHTTPSConnector("srv", cliCert)
 	var resp *http.Response
 	resp, err = cli.Get("https://127.0.0.1:7777/")
@@ -236,7 +234,7 @@ func testDeregister(t *testing.T) {
 	conf.CertTemplate = securelink.GetCertTemplate(nil, nil)
 
 	cert, _ := ca.NewCert(conf, "cli")
-	conn, err := securelink.NewServiceConnector(":3461", "test.1", cert, time.Second)
+	conn, err := securelink.NewServiceConnector(":3461", "test.1", cert, time.Millisecond*50)
 	if err != nil {
 		t.Fatal(err)
 	}

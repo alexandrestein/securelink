@@ -26,10 +26,16 @@ type (
 	// You specify the TLS certificate for server but the same certificate is used in case
 	// of Dial.
 	Handler interface {
+		// Name returns a string to define the service or the group of service caller
+		// regestred. Multiple services can have the same name.
 		Name() string
 
+		// Handle is called if Match returns true. Ones the service gets the
+		// connection no other services will have the ability to get this connection.
 		Handle(conn net.Conn) error
 
+		// Must return true if the given host name is related to the related service.
+		// If it returns true this service will be the only on to get the connection.
 		Match(hostName string) bool
 	}
 

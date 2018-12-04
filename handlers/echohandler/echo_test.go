@@ -4,13 +4,11 @@ import (
 	"crypto/tls"
 	"io/ioutil"
 	"testing"
-	"time"
 
 	"github.com/labstack/echo"
 
-	"github.com/alexandrestein/gotinydb/replication/securelink"
-
-	"github.com/alexandrestein/gotinydb/replication/securelink/handlers/echohandler"
+	"github.com/alexandrestein/securelink"
+	"github.com/alexandrestein/securelink/handlers/echohandler"
 )
 
 func TestMain(t *testing.T) {
@@ -40,14 +38,16 @@ func TestMain(t *testing.T) {
 	}
 
 	tlsConfig := securelink.GetBaseTLSConfig("1", cert)
-	tlsConfig.ClientAuth = tls.VerifyClientCertIfGiven
-	s, _ := securelink.NewServer(1364, tlsConfig, cert, getNameFn)
+	tlsConfig.ClientAuth = tls.RequireAndVerifyClientCert
+	s, err := securelink.NewServer(1364, tlsConfig, cert, getNameFn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
 
 	s.RegisterService(echoService)
 
-	time.Sleep(time.Minute)
-
-	cli := securelink.NewHTTPSConnector("1", cert)
+	cli := securelink.NewHTTPSConnector("echo.1", cert)
 	resp, err := cli.Get("https://echo.localhost:1364/")
 	if err != nil {
 		t.Fatal(err)
@@ -56,6 +56,10 @@ func TestMain(t *testing.T) {
 	buf, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		t.Fatal(err)
+	}
+
+	if string(buf) != "OK" {
+		t.Fatalf("the returned body is %q but not %q", string(buf), "OK")
 	}
 
 	if testing.Verbose() {

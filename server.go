@@ -1,3 +1,5 @@
+// Package securelink enable caller to stream multiple connection inside a sign
+// TLS link. The package provide CA and certificate generation to have easy management.
 package securelink
 
 import (

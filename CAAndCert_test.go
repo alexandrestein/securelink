@@ -48,14 +48,19 @@ func TestNewCA(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			listen(t, ca)
+			errChan := listen(t, ca)
 
 			runClient(t, ca)
+
+			err = <-errChan
+			if err != nil {
+				t.Fatal(err)
+			}
 		})
 	}
 }
 
-func listen(t *testing.T, ca *securelink.Certificate) {
+func listen(t *testing.T, ca *securelink.Certificate) (errChan chan error) {
 	serverTLSConfig := &tls.Config{
 		Certificates: []tls.Certificate{ca.GetTLSCertificate()},
 		ClientCAs:    ca.GetCertPool(),
@@ -67,8 +72,10 @@ func listen(t *testing.T, ca *securelink.Certificate) {
 		t.Fatal(err)
 	}
 
-	errChan := make(chan error)
-	go func(listener net.Listener) {
+	errChan = make(chan error)
+	go func(listener net.Listener, errChan chan error) {
+		defer func() { errChan <- nil }()
+
 		netConn, err := listener.Accept()
 		if err != nil {
 			errChan <- err
@@ -102,14 +109,9 @@ func listen(t *testing.T, ca *securelink.Certificate) {
 			errChan <- fmt.Errorf("the read and write length are not equal %d %d", n, n2)
 			return
 		}
+	}(listener, errChan)
 
-		errChan <- nil
-	}(listener)
-
-	err = <-errChan
-	if err != nil {
-		t.Fatal(err)
-	}
+	return errChan
 }
 
 func runClient(t *testing.T, ca *securelink.Certificate) {

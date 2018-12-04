@@ -28,6 +28,24 @@ var (
 func TestTransportAndServer(t *testing.T) {
 	tt = t
 
+	testTransportAndServerSetupServer(t)
+
+	testTransportAndServerServerPingPong(t)
+
+	t.Run("deregister", testDeregister)
+	t.Run("http fallback", httpFallback)
+
+	err := s1.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = s2.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func testTransportAndServerSetupServer(t *testing.T) {
 	conf := securelink.NewDefaultCertificationConfig(nil)
 	conf.CertTemplate = securelink.GetCertTemplate(nil, nil)
 	ca, _ = securelink.NewCA(conf, "ca")
@@ -65,9 +83,10 @@ func TestTransportAndServer(t *testing.T) {
 	}
 	s1.RegisterService(securelink.NewHandler("testGroup", testPrefixFn, handle1))
 	s2.RegisterService(securelink.NewHandler("testGroup", testPrefixFn, handle2))
+}
 
-	var conn net.Conn
-	conn, err = s2.Dial(":3461", "test", time.Second)
+func testTransportAndServerServerPingPong(t *testing.T) {
+	conn, err := s2.Dial(":3461", "test", time.Second)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,19 +126,6 @@ func TestTransportAndServer(t *testing.T) {
 	}
 
 	err = conn.Close()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// t.Run("net.Listener interface", testNetListenerInterface)
-	t.Run("deregister", testDeregister)
-	t.Run("http fallback", httpFallback)
-
-	err = s1.Close()
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = s2.Close()
 	if err != nil {
 		t.Fatal(err)
 	}

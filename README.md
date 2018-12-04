@@ -10,3 +10,7 @@ In usual case you will need to open at least two ports on all your nodes. Maybe 
 In this example we speak only about two service but you can have many more.
 
 This is the purpose of the package.
+
+## status
+
+The project is not ready and needs for now.

@@ -1,4 +1,4 @@
-# securelink
+# securelink [![codebeat badge](https://codebeat.co/badges/bdcbeb55-fa63-4a0f-93b6-14561f22a37d)](https://codebeat.co/projects/github-com-alexandrestein-securelink-master)
 
 **Securelink** tries to provides an easy to use and efficient way to use multiple interconnected services without the need to open and to manage many open ports.
 

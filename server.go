@@ -25,12 +25,14 @@ type (
 		errChan             chan error
 	}
 
+	// TLS defines sub struct of Server which take care of TLS elements
 	TLS struct {
 		Listener    net.Listener
 		Certificate *Certificate
 		Config      *tls.Config
 	}
 
+	// Services is related to the handling of the connection
 	Services struct {
 		Echo       *echo.Echo
 		AddrStruct *common.Addr
@@ -86,9 +88,7 @@ func NewServer(port uint16, tlsConfig *tls.Config, cert *Certificate, getHostNam
 	httpServer.TLSConfig = tlsConfig
 	httpServer.Addr = addr.String()
 
-	go func(e *Server, httpServer *http.Server) {
-		s.errChan <- s.Services.Echo.StartServer(httpServer)
-	}(s, httpServer)
+	go func(e *Server, httpServer *http.Server) { s.errChan <- s.Services.Echo.StartServer(httpServer) }(s, httpServer)
 
 	return s, nil
 }

@@ -48,7 +48,7 @@ func TestMain(t *testing.T) {
 	s.RegisterService(echoService)
 
 	cli := securelink.NewHTTPSConnector("echo.1", cert)
-	resp, err := cli.Get("https://echo.localhost:1364/")
+	resp, err := cli.Get("https://127.0.0.1:1364/")
 	if err != nil {
 		t.Fatal(err)
 	}

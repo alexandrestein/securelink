@@ -3,7 +3,6 @@ language: go
 go:
   - "1.11.x"
   - master
-  - tip
 
 os:
   - linux
@@ -17,5 +16,6 @@ install:
   - go get -v ./...
 
 script:
-  - go test -race -v -cover -coverprofile=coverage.out ./...
-  - codeclimate-test-reporter < coverage.out
+  # - go test -race -v -cover -coverprofile=cov.out
+  # - codeclimate-test-reporter < cov.out
+  - ./test_script.sh

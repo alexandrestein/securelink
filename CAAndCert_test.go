@@ -2,6 +2,8 @@ package securelink_test
 
 import (
 	"crypto/tls"
+	"crypto/x509"
+	"fmt"
 	"net"
 	"reflect"
 	"testing"
@@ -65,36 +67,49 @@ func listen(t *testing.T, ca *securelink.Certificate) {
 		t.Fatal(err)
 	}
 
+	errChan := make(chan error)
 	go func(listener net.Listener) {
 		netConn, err := listener.Accept()
 		if err != nil {
-			t.Fatal(err)
+			errChan <- err
+			return
 		}
 
 		tlsConn := netConn.(*tls.Conn)
 		err = tlsConn.Handshake()
 		if err != nil {
-			t.Fatal(err)
+			errChan <- err
+			return
 		}
 
 		readBuffer := make([]byte, 1000)
 		var n, n2 int
 		n, err = netConn.Read(readBuffer)
 		if err != nil {
-			t.Fatal(err)
+			errChan <- err
+			return
 		}
 
 		readBuffer = readBuffer[:n]
 
 		n2, err = netConn.Write(readBuffer)
 		if err != nil {
-			t.Fatal(err)
+			errChan <- err
+			return
 		}
 
 		if n != n2 {
-			t.Fatal("the read and write length are not equal", n, n2)
+			errChan <- fmt.Errorf("the read and write length are not equal %d %d", n, n2)
+			return
 		}
+
+		errChan <- nil
 	}(listener)
+
+	err = <-errChan
+	if err != nil {
+		t.Fatal(err)
+	}
 }
 
 func runClient(t *testing.T, ca *securelink.Certificate) {
@@ -192,5 +207,69 @@ func TestCertificateMarshaling(t *testing.T) {
 			}
 		})
 	}
+}
 
+func TestNewCertConfigPublicKey(t *testing.T) {
+	ca, err := securelink.NewCA(nil, "ca")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		Name   string
+		Exist  bool
+		Type   securelink.KeyType
+		Length securelink.KeyLength
+	}{
+		{"Present but no values", true, "", ""},
+		{"RSA no length", true, securelink.KeyTypeRSA, ""},
+		{"Ec no length", true, securelink.KeyTypeEc, ""},
+		{"No Type 256", true, "", securelink.KeyLengthEc256},
+		{"No Type 2048", true, "", securelink.KeyLengthRsa2048},
+	}
+
+	for _, test := range tests {
+		t.Run(test.Name, func(t *testing.T) {
+			certConfig := securelink.NewDefaultCertificationConfigWithDefaultTemplate(ca, "testing")
+			if test.Exist {
+				certConfig.PublicKey = &securelink.KeyPair{
+					Type:   test.Type,
+					Length: test.Length,
+				}
+			}
+
+			_, err = ca.NewCert(certConfig)
+			if err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+func TestGetSignatureAlgorithm(t *testing.T) {
+	tests := []struct {
+		Name     string
+		Type     securelink.KeyType
+		Length   securelink.KeyLength
+		Expected x509.SignatureAlgorithm
+	}{
+		{"SHA256WithRSAPSS", securelink.KeyTypeRSA, securelink.KeyLengthRsa2048, x509.SHA256WithRSAPSS},
+		{"SHA384WithRSAPSS", securelink.KeyTypeRSA, securelink.KeyLengthRsa3072, x509.SHA384WithRSAPSS},
+		{"SHA512WithRSAPSS 4096", securelink.KeyTypeRSA, securelink.KeyLengthRsa4096, x509.SHA512WithRSAPSS},
+		{"SHA512WithRSAPSS 8192", securelink.KeyTypeRSA, securelink.KeyLengthRsa8192, x509.SHA512WithRSAPSS},
+		{"ECDSAWithSHA256", securelink.KeyTypeEc, securelink.KeyLengthEc256, x509.ECDSAWithSHA256},
+		{"ECDSAWithSHA384", securelink.KeyTypeEc, securelink.KeyLengthEc384, x509.ECDSAWithSHA384},
+		{"ECDSAWithSHA512", securelink.KeyTypeEc, securelink.KeyLengthEc521, x509.ECDSAWithSHA512},
+		{"UnknownSignatureAlgorithm", "", "", x509.UnknownSignatureAlgorithm},
+	}
+
+	for _, test := range tests {
+		t.Run(test.Name, func(t *testing.T) {
+			ret := securelink.GetSignatureAlgorithm(test.Type, test.Length)
+
+			if !reflect.DeepEqual(ret, test.Expected) {
+				t.Fatalf("the expected signature is %v but had %v", test.Expected, ret)
+			}
+		})
+	}
 }

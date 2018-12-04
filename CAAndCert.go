@@ -26,7 +26,6 @@ type (
 
 		CACerts  []*x509.Certificate
 		certPool *x509.CertPool
-		// IsCA     bool
 	}
 
 	certExport struct {
@@ -84,6 +83,10 @@ func GetSignatureAlgorithm(keyType KeyType, keyLength KeyLength) x509.SignatureA
 // and client and server certificate for remote instances.
 // names are used as domain names.
 func NewCA(config *NewCertConfig, names ...string) (*Certificate, error) {
+	if config == nil {
+		config = NewDefaultCertificationConfigWithDefaultTemplate(nil)
+	}
+
 	config.IsCA = true
 	cert, err := newCert(config, names...)
 	if err != nil {
@@ -102,6 +105,10 @@ func (c *Certificate) ID() *big.Int {
 func (c *Certificate) NewCert(config *NewCertConfig, names ...string) (*Certificate, error) {
 	if !c.Cert.IsCA {
 		return nil, fmt.Errorf("this is not a CA")
+	}
+
+	if config == nil {
+		config = NewDefaultCertificationConfigWithDefaultTemplate(c)
 	}
 
 	config.Parent = c
@@ -151,17 +158,11 @@ func newCert(config *NewCertConfig, names ...string) (*Certificate, error) {
 
 	caCerts := []*x509.Certificate{}
 	config.Parent.CACerts = append(config.Parent.CACerts, config.Parent.Cert)
-	// found := false
 	for _, caCert := range config.Parent.CACerts {
-		// if config.Parent.Cert.SerialNumber.Int64() == caCert.SerialNumber.Int64() {
-
-		// }
 		if caCert.Signature != nil || len(caCert.Signature) != 0 {
 			caCerts = append(caCerts, caCert)
 		}
 	}
-	// fmt.Println("found", found)
-	// fmt.Println("config.Parent.CACerts", config.Parent.CACerts, config.Parent.Cert)
 
 	return &Certificate{
 		Cert:    cert,
@@ -249,8 +250,6 @@ func Unmarshal(input []byte) (*Certificate, error) {
 		var caCert *x509.Certificate
 		caCert, err = x509.ParseCertificate(caCertAsBytes)
 		if err != nil {
-			fmt.Println("err", err, string(input))
-			fmt.Println(caCertAsBytes)
 			return nil, err
 		}
 
@@ -274,9 +273,6 @@ func NewDefaultCertificationConfig(parent *Certificate) *NewCertConfig {
 		LifeTime: DefaultCertLifeTime,
 
 		Parent: parent,
-
-		// KeyType:   DefaultKeyType,
-		// KeyLength: DefaultKeyLength,
 	}
 }
 
@@ -302,14 +298,7 @@ func (ncc *NewCertConfig) Valid() (err error) {
 		}
 	}
 
-	if ncc.PublicKey == nil {
-		err = ncc.genPublicKey()
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
+	return ncc.formatPublicKey()
 }
 
 func (ncc *NewCertConfig) genParent() error {
@@ -333,40 +322,47 @@ func (ncc *NewCertConfig) genParent() error {
 	return nil
 }
 
-func (ncc *NewCertConfig) genPublicKey() (err error) {
+func (ncc *NewCertConfig) formatPublicKey() (err error) {
 	if ncc.PublicKey == nil {
 		ncc.PublicKey = new(KeyPair)
 		ncc.PublicKey.Type = ncc.Parent.KeyPair.Type
 		ncc.PublicKey.Length = ncc.Parent.KeyPair.Length
+	} else if ncc.PublicKey.Public != nil {
+		return nil
 	} else {
 		if ncc.PublicKey.Type == "" && ncc.PublicKey.Length == "" {
 			ncc.PublicKey.Type = DefaultKeyType
 			ncc.PublicKey.Length = DefaultKeyLength
-		} else if ncc.PublicKey.Type != "" && ncc.PublicKey.Length == "" {
-			switch ncc.PublicKey.Type {
-			case KeyTypeEc:
-				ncc.PublicKey.Length = DefaultKeyLength
-			case KeyTypeRSA:
-				ncc.PublicKey.Length = DefaultRSAKeyLength
-			}
-		} else if ncc.PublicKey.Type == "" && ncc.PublicKey.Length != "" {
-			switch ncc.PublicKey.Length {
-			case KeyLengthRsa2048, KeyLengthRsa3072, KeyLengthRsa4096, KeyLengthRsa8192:
-				ncc.PublicKey.Type = KeyTypeRSA
-			case KeyLengthEc256, KeyLengthEc384, KeyLengthEc521:
-				ncc.PublicKey.Type = KeyTypeEc
-			}
+		} else {
+			ncc.formatPublicKeyPartlyDefined()
 		}
 	}
 
 	ncc.PublicKey, err = NewKeyPair(ncc.PublicKey.Type, ncc.PublicKey.Length)
 	return
 }
+func (ncc *NewCertConfig) formatPublicKeyPartlyDefined() {
+	if ncc.PublicKey.Type != "" && ncc.PublicKey.Length == "" {
+		switch ncc.PublicKey.Type {
+		case KeyTypeEc:
+			ncc.PublicKey.Length = DefaultKeyLength
+		case KeyTypeRSA:
+			ncc.PublicKey.Length = DefaultRSAKeyLength
+		}
+	} else if ncc.PublicKey.Type == "" && ncc.PublicKey.Length != "" {
+		switch ncc.PublicKey.Length {
+		case KeyLengthRsa2048, KeyLengthRsa3072, KeyLengthRsa4096, KeyLengthRsa8192:
+			ncc.PublicKey.Type = KeyTypeRSA
+		case KeyLengthEc256, KeyLengthEc384, KeyLengthEc521:
+			ncc.PublicKey.Type = KeyTypeEc
+		}
+	}
+}
 
 func (ncc *NewCertConfig) wildcard() {
 	if ncc.IsWaldcard {
 		// Build a wildcard checker to not add a wildcard if already
-		wildcardMatchRegexp := regexp.MustCompile("^*\\.")
+		wildcardMatchRegexp := regexp.MustCompile(`^*\.`)
 
 		// Range the given names
 		for _, name := range ncc.CertTemplate.DNSNames {

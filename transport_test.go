@@ -28,15 +28,15 @@ var (
 func TestTransportAndServer(t *testing.T) {
 	tt = t
 
-	conf := securelink.NewDefaultCertificationConfig()
+	conf := securelink.NewDefaultCertificationConfig(nil)
 	conf.CertTemplate = securelink.GetCertTemplate(nil, nil)
 	ca, _ = securelink.NewCA(conf, "ca")
 
-	conf = securelink.NewDefaultCertificationConfig()
+	conf = securelink.NewDefaultCertificationConfig(nil)
 	conf.CertTemplate = securelink.GetCertTemplate(nil, nil)
 	cert1, _ := ca.NewCert(conf, "1")
 
-	conf = securelink.NewDefaultCertificationConfig()
+	conf = securelink.NewDefaultCertificationConfig(nil)
 	conf.CertTemplate = securelink.GetCertTemplate(nil, nil)
 	cert2, _ := ca.NewCert(conf, "2")
 
@@ -194,7 +194,7 @@ func handle2(connAsServer net.Conn) error {
 }
 
 func httpFallback(t *testing.T) {
-	conf := securelink.NewDefaultCertificationConfig()
+	conf := securelink.NewDefaultCertificationConfig(nil)
 	conf.CertTemplate = securelink.GetCertTemplate(nil, nil)
 
 	srvCert, _ := ca.NewCert(conf, "srv")
@@ -230,7 +230,7 @@ func httpFallback(t *testing.T) {
 func testDeregister(t *testing.T) {
 	s1.DeregisterService("testGroup")
 
-	conf := securelink.NewDefaultCertificationConfig()
+	conf := securelink.NewDefaultCertificationConfig(nil)
 	conf.CertTemplate = securelink.GetCertTemplate(nil, nil)
 
 	cert, _ := ca.NewCert(conf, "cli")

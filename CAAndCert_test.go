@@ -35,9 +35,7 @@ func TestNewCA(t *testing.T) {
 				t.SkipNow()
 			}
 
-			conf := securelink.NewDefaultCertificationConfig()
-			conf.KeyType = test.Type
-			conf.KeyLength = test.Length
+			conf := securelink.NewDefaultCertificationConfig(nil)
 			conf.CertTemplate = securelink.GetCertTemplate(nil, nil)
 
 			ca, err := securelink.NewCA(conf, "ca")
@@ -100,7 +98,7 @@ func listen(t *testing.T, ca *securelink.Certificate) {
 }
 
 func runClient(t *testing.T, ca *securelink.Certificate) {
-	conf := securelink.NewDefaultCertificationConfig()
+	conf := securelink.NewDefaultCertificationConfig(ca)
 	conf.CertTemplate = securelink.GetCertTemplate(nil, nil)
 	cert, err := ca.NewCert(conf, "cli")
 	if err != nil {
@@ -143,7 +141,7 @@ func runClient(t *testing.T, ca *securelink.Certificate) {
 }
 
 func TestCertificateMarshaling(t *testing.T) {
-	conf := securelink.NewDefaultCertificationConfig()
+	conf := securelink.NewDefaultCertificationConfig(nil)
 	conf.CertTemplate = securelink.GetCertTemplate(nil, nil)
 
 	ca, _ := securelink.NewCA(conf, "ca")
@@ -170,7 +168,7 @@ func TestCertificateMarshaling(t *testing.T) {
 				t.SkipNow()
 			}
 
-			conf := securelink.NewDefaultCertificationConfig()
+			conf := securelink.NewDefaultCertificationConfig(nil)
 			conf.CertTemplate = securelink.GetCertTemplate(nil, nil)
 
 			cert, err := ca.NewCert(conf, "node1")
@@ -178,7 +176,11 @@ func TestCertificateMarshaling(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			asBytes := cert.Marshal()
+			var asBytes []byte
+			asBytes, err = cert.Marshal()
+			if err != nil {
+				t.Fatal(err)
+			}
 
 			cert2, err := securelink.Unmarshal(asBytes)
 			if err != nil {

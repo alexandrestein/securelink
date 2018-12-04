@@ -12,11 +12,11 @@ import (
 )
 
 func TestMain(t *testing.T) {
-	conf := securelink.NewDefaultCertificationConfig()
+	conf := securelink.NewDefaultCertificationConfig(nil)
 	conf.CertTemplate = securelink.GetCertTemplate(nil, nil)
 	ca, _ := securelink.NewCA(conf, "ca")
 
-	conf = securelink.NewDefaultCertificationConfig()
+	conf = securelink.NewDefaultCertificationConfig(nil)
 	conf.CertTemplate = securelink.GetCertTemplate(nil, nil)
 	cert, _ := ca.NewCert(conf, "1")
 

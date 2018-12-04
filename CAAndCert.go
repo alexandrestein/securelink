@@ -24,15 +24,15 @@ type (
 		Cert    *x509.Certificate
 		KeyPair *KeyPair
 
-		CACert   *x509.Certificate
-		CertPool *x509.CertPool
-		IsCA     bool
+		CACerts  []*x509.Certificate
+		certPool *x509.CertPool
+		// IsCA     bool
 	}
 
 	certExport struct {
 		Cert    []byte
 		KeyPair []byte
-		CACert  []byte
+		CACerts [][]byte
 	}
 
 	// NewCertConfig is used to build a new certificate
@@ -45,12 +45,7 @@ type (
 
 		LifeTime time.Duration
 
-		KeyType   KeyType
-		KeyLength KeyLength
-
 		PublicKey *KeyPair
-
-		CertPool *x509.CertPool
 	}
 )
 
@@ -59,22 +54,6 @@ func buildCertPEM(input []byte) []byte {
 		Type:  "CERTIFICATE",
 		Bytes: input,
 	})
-}
-
-func genKeyPair(keyType KeyType, keyLength KeyLength) (*KeyPair, error) {
-	if keyType == KeyTypeRSA {
-		switch keyLength {
-		case KeyLengthRsa2048, KeyLengthRsa3072, KeyLengthRsa4096, KeyLengthRsa8192:
-			return NewRSA(keyLength), nil
-		}
-	} else if keyType == KeyTypeEc {
-		switch keyLength {
-		case KeyLengthEc256, KeyLengthEc384, KeyLengthEc521:
-			return NewEc(keyLength), nil
-		}
-	}
-
-	return nil, ErrKeyConfigNotCompatible
 }
 
 // GetSignatureAlgorithm returns the signature algorithm for the given key type and key size
@@ -111,10 +90,6 @@ func NewCA(config *NewCertConfig, names ...string) (*Certificate, error) {
 		return nil, err
 	}
 
-	certPool := x509.NewCertPool()
-	certPool.AddCert(cert.Cert)
-	cert.CertPool = certPool
-
 	return cert, nil
 }
 
@@ -125,13 +100,20 @@ func (c *Certificate) ID() *big.Int {
 
 // NewCert returns a new certificate pointer which can be used for tls connection
 func (c *Certificate) NewCert(config *NewCertConfig, names ...string) (*Certificate, error) {
-	if !c.IsCA {
+	if !c.Cert.IsCA {
 		return nil, fmt.Errorf("this is not a CA")
 	}
 
 	config.Parent = c
 
-	return newCert(config, names...)
+	cert, err := newCert(config, names...)
+	if err != nil {
+		return nil, err
+	}
+
+	cert.CACerts = c.CACerts
+
+	return cert, nil
 }
 
 func newCert(config *NewCertConfig, names ...string) (*Certificate, error) {
@@ -167,12 +149,24 @@ func newCert(config *NewCertConfig, names ...string) (*Certificate, error) {
 		return nil, err
 	}
 
+	caCerts := []*x509.Certificate{}
+	config.Parent.CACerts = append(config.Parent.CACerts, config.Parent.Cert)
+	// found := false
+	for _, caCert := range config.Parent.CACerts {
+		// if config.Parent.Cert.SerialNumber.Int64() == caCert.SerialNumber.Int64() {
+
+		// }
+		if caCert.Signature != nil || len(caCert.Signature) != 0 {
+			caCerts = append(caCerts, caCert)
+		}
+	}
+	// fmt.Println("found", found)
+	// fmt.Println("config.Parent.CACerts", config.Parent.CACerts, config.Parent.Cert)
+
 	return &Certificate{
-		Cert:     cert,
-		KeyPair:  config.PublicKey,
-		CACert:   config.Parent.Cert,
-		CertPool: config.CertPool,
-		IsCA:     config.IsCA,
+		Cert:    cert,
+		KeyPair: config.PublicKey,
+		CACerts: caCerts,
 	}, nil
 }
 
@@ -185,37 +179,48 @@ func (c *Certificate) GetCertPEM() []byte {
 // tls.Config{Certificates: []tls.Certificate{ca.GetTLSCertificate()}}
 func (c *Certificate) GetTLSCertificate() tls.Certificate {
 	cert, _ := tls.X509KeyPair(c.GetCertPEM(), c.KeyPair.GetPrivatePEM())
-	// cert, _ := tls.X509KeyPair(c.GetCertPEM(), c.GetPrivateKeyPEM())
 	return cert
 }
 
 // GetCertPool is useful in tls.Config{RootCAs: ca.GetCertPool()}
-func (c *Certificate) GetCertPool() *x509.CertPool {
-	pool := x509.NewCertPool()
-
-	if !c.IsCA {
-		if c.CertPool != nil {
-			return c.CertPool
-		}
-		pool.AddCert(c.CACert)
+func (c *Certificate) GetCertPool() (pool *x509.CertPool) {
+	if c.certPool != nil {
+		return c.certPool
 	}
-	pool.AddCert(c.Cert)
 
-	return pool
+	pool = x509.NewCertPool()
+
+	for _, caCert := range c.CACerts {
+		pool.AddCert(caCert)
+	}
+
+	if c.Cert.IsCA {
+		pool.AddCert(c.Cert)
+	}
+
+	c.certPool = pool
+
+	return
 }
 
 // Marshal convert the Certificate pointer into a slice of byte for
 // transport or future use
-func (c *Certificate) Marshal() []byte {
+func (c *Certificate) Marshal() ([]byte, error) {
+	caCerts := [][]byte{}
+	for _, caCert := range c.CACerts {
+		if caCert.Raw == nil || len(caCert.Raw) == 0 {
+			continue
+		}
+		caCerts = append(caCerts, caCert.Raw)
+	}
+
 	export := &certExport{
 		Cert:    c.Cert.Raw,
 		KeyPair: c.KeyPair.Marshal(),
-		CACert:  c.CACert.Raw,
+		CACerts: caCerts,
 	}
 
-	ret, _ := json.Marshal(export)
-
-	return ret
+	return json.Marshal(export)
 }
 
 // Unmarshal build a new Certificate pointer with the information given
@@ -239,40 +244,46 @@ func Unmarshal(input []byte) (*Certificate, error) {
 		return nil, err
 	}
 
-	certPool := x509.NewCertPool()
-	var caCert *x509.Certificate
-	caCert, err = x509.ParseCertificate(export.CACert)
-	if err != nil {
-		return nil, err
+	caCerts := make([]*x509.Certificate, len(export.CACerts))
+	for i, caCertAsBytes := range export.CACerts {
+		var caCert *x509.Certificate
+		caCert, err = x509.ParseCertificate(caCertAsBytes)
+		if err != nil {
+			fmt.Println("err", err, string(input))
+			fmt.Println(caCertAsBytes)
+			return nil, err
+		}
+
+		caCerts[i] = caCert
 	}
-	certPool.AddCert(caCert)
 
 	return &Certificate{
-		Cert:     cert,
-		KeyPair:  keyPair,
-		CACert:   caCert,
-		CertPool: certPool,
-		IsCA:     cert.IsCA,
+		Cert:    cert,
+		KeyPair: keyPair,
+		CACerts: caCerts,
 	}, nil
 }
 
 // NewDefaultCertificationConfig builds a new NewCertConfig pointer
 // with the default values
-func NewDefaultCertificationConfig() *NewCertConfig {
+func NewDefaultCertificationConfig(parent *Certificate) *NewCertConfig {
 	return &NewCertConfig{
 		IsCA:       false,
 		IsWaldcard: true,
 
-		LifeTime:  DefaultCertLifeTime,
-		KeyType:   DefaultKeyType,
-		KeyLength: DefaultKeyLength,
+		LifeTime: DefaultCertLifeTime,
+
+		Parent: parent,
+
+		// KeyType:   DefaultKeyType,
+		// KeyLength: DefaultKeyLength,
 	}
 }
 
 // NewDefaultCertificationConfigWithDefaultTemplate does the same ase above but
 // with a default template
-func NewDefaultCertificationConfigWithDefaultTemplate(names ...string) *NewCertConfig {
-	ret := NewDefaultCertificationConfig()
+func NewDefaultCertificationConfigWithDefaultTemplate(parent *Certificate, names ...string) *NewCertConfig {
+	ret := NewDefaultCertificationConfig(parent)
 	ret.CertTemplate = GetCertTemplate(names, nil)
 	return ret
 }
@@ -285,20 +296,10 @@ func (ncc *NewCertConfig) Valid() (err error) {
 	}
 
 	if ncc.Parent == nil {
-		if ncc.KeyType == "" || ncc.KeyLength == "" {
-			ncc.KeyType = DefaultKeyType
-			ncc.KeyLength = DefaultKeyLength
-		}
 		err = ncc.genParent()
 		if err != nil {
 			return err
 		}
-	}
-
-	if ncc.CertPool == nil {
-		certPool := x509.NewCertPool()
-		certPool.AddCert(ncc.Parent.Cert)
-		ncc.CertPool = certPool
 	}
 
 	if ncc.PublicKey == nil {
@@ -312,8 +313,7 @@ func (ncc *NewCertConfig) Valid() (err error) {
 }
 
 func (ncc *NewCertConfig) genParent() error {
-	// nccCp := new(NewCertConfig)
-	keyPair, err := genKeyPair(ncc.KeyType, ncc.KeyLength)
+	keyPair, err := NewKeyPair(DefaultKeyType, DefaultKeyLength)
 	if err != nil {
 		return err
 	}
@@ -334,7 +334,32 @@ func (ncc *NewCertConfig) genParent() error {
 }
 
 func (ncc *NewCertConfig) genPublicKey() (err error) {
-	ncc.PublicKey, err = genKeyPair(ncc.KeyType, ncc.KeyLength)
+	if ncc.PublicKey == nil {
+		ncc.PublicKey = new(KeyPair)
+		ncc.PublicKey.Type = ncc.Parent.KeyPair.Type
+		ncc.PublicKey.Length = ncc.Parent.KeyPair.Length
+	} else {
+		if ncc.PublicKey.Type == "" && ncc.PublicKey.Length == "" {
+			ncc.PublicKey.Type = DefaultKeyType
+			ncc.PublicKey.Length = DefaultKeyLength
+		} else if ncc.PublicKey.Type != "" && ncc.PublicKey.Length == "" {
+			switch ncc.PublicKey.Type {
+			case KeyTypeEc:
+				ncc.PublicKey.Length = DefaultKeyLength
+			case KeyTypeRSA:
+				ncc.PublicKey.Length = DefaultRSAKeyLength
+			}
+		} else if ncc.PublicKey.Type == "" && ncc.PublicKey.Length != "" {
+			switch ncc.PublicKey.Length {
+			case KeyLengthRsa2048, KeyLengthRsa3072, KeyLengthRsa4096, KeyLengthRsa8192:
+				ncc.PublicKey.Type = KeyTypeRSA
+			case KeyLengthEc256, KeyLengthEc384, KeyLengthEc521:
+				ncc.PublicKey.Type = KeyTypeEc
+			}
+		}
+	}
+
+	ncc.PublicKey, err = NewKeyPair(ncc.PublicKey.Type, ncc.PublicKey.Length)
 	return
 }
 

@@ -33,10 +33,8 @@ func TestToken(t *testing.T) {
 				t.SkipNow()
 			}
 
-			conf := securelink.NewDefaultCertificationConfig()
+			conf := securelink.NewDefaultCertificationConfig(nil)
 			conf.CertTemplate = securelink.GetCertTemplate(nil, nil)
-			conf.KeyType = test.Type
-			conf.KeyLength = test.Length
 
 			ca, err := securelink.NewCA(conf, "srv")
 			if err != nil {

@@ -47,6 +47,7 @@ var (
 	DefaultCertLifeTime = time.Hour * 24 * 30 * 3 // 3 months
 	DefaultKeyType      = KeyTypeEc
 	DefaultKeyLength    = KeyLengthEc384
+	DefaultRSAKeyLength = KeyLengthRsa3072
 )
 
 // var (

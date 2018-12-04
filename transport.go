@@ -117,7 +117,7 @@ func GetID(addr string, cert *Certificate) (serverID string) {
 
 	remoteCert := conn.ConnectionState().PeerCertificates[0]
 	opts := x509.VerifyOptions{
-		Roots: cert.CertPool,
+		Roots: cert.GetCertPool(),
 	}
 
 	if _, err := remoteCert.Verify(opts); err != nil {

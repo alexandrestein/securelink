@@ -36,9 +36,6 @@ type (
 
 	// NewCertConfig is used to build a new certificate
 	NewCertConfig struct {
-		IsCA       bool
-		IsWaldcard bool
-
 		CertTemplate *x509.Certificate
 		Parent       *Certificate
 
@@ -87,8 +84,8 @@ func NewCA(config *NewCertConfig, names ...string) (*Certificate, error) {
 		config = NewDefaultCertificationConfigWithDefaultTemplate(nil)
 	}
 
-	config.IsCA = true
-	cert, err := newCert(config, names...)
+	config.CertTemplate.IsCA = true
+	cert, err := newCert(config, true, names...)
 	if err != nil {
 		return nil, err
 	}
@@ -113,7 +110,7 @@ func (c *Certificate) NewCert(config *NewCertConfig, names ...string) (*Certific
 
 	config.Parent = c
 
-	cert, err := newCert(config, names...)
+	cert, err := newCert(config, true, names...)
 	if err != nil {
 		return nil, err
 	}
@@ -123,15 +120,15 @@ func (c *Certificate) NewCert(config *NewCertConfig, names ...string) (*Certific
 	return cert, nil
 }
 
-func newCert(config *NewCertConfig, names ...string) (*Certificate, error) {
+func newCert(config *NewCertConfig, wildcard bool, names ...string) (*Certificate, error) {
 	if err := config.Valid(); err != nil {
 		return nil, err
 	}
 
-	config.CertTemplate.IsCA = config.IsCA
-
 	config.CertTemplate.DNSNames = append(config.CertTemplate.DNSNames, names...)
-	config.wildcard()
+	if wildcard {
+		config.wildcard()
+	}
 
 	config.CertTemplate.NotBefore = time.Now()
 	config.CertTemplate.NotAfter = time.Now().Add(config.LifeTime)
@@ -267,9 +264,6 @@ func Unmarshal(input []byte) (*Certificate, error) {
 // with the default values
 func NewDefaultCertificationConfig(parent *Certificate) *NewCertConfig {
 	return &NewCertConfig{
-		IsCA:       false,
-		IsWaldcard: true,
-
 		LifeTime: DefaultCertLifeTime,
 
 		Parent: parent,
@@ -315,8 +309,7 @@ func (ncc *NewCertConfig) genParent() error {
 		ncc.PublicKey = keyPair
 	}
 
-	ncc.IsCA = true
-	ncc.IsWaldcard = true
+	parent.Cert.IsCA = true
 	ncc.Parent = parent
 
 	return nil
@@ -360,34 +353,32 @@ func (ncc *NewCertConfig) formatPublicKeyPartlyDefined() {
 }
 
 func (ncc *NewCertConfig) wildcard() {
-	if ncc.IsWaldcard {
-		// Build a wildcard checker to not add a wildcard if already
-		wildcardMatchRegexp := regexp.MustCompile(`^*\.`)
+	// Build a wildcard checker to not add a wildcard if already
+	wildcardMatchRegexp := regexp.MustCompile(`^*\.`)
 
-		// Range the given names
+	// Range the given names
+	for _, name := range ncc.CertTemplate.DNSNames {
+		toAdd := ""
+		// If not a wildcard
+		if !wildcardMatchRegexp.MatchString(name) {
+			toAdd = fmt.Sprintf("*.%s", name)
+		} else {
+			// This is already a wildcard domain, move to the next
+			continue
+		}
+
+		// Check if the domain is not already present
+		exist := false
 		for _, name := range ncc.CertTemplate.DNSNames {
-			toAdd := ""
-			// If not a wildcard
-			if !wildcardMatchRegexp.MatchString(name) {
-				toAdd = fmt.Sprintf("*.%s", name)
-			} else {
-				// This is already a wildcard domain, move to the next
-				continue
+			if name == toAdd {
+				exist = true
+				break
 			}
+		}
 
-			// Check if the domain is not already present
-			exist := false
-			for _, name := range ncc.CertTemplate.DNSNames {
-				if name == toAdd {
-					exist = true
-					break
-				}
-			}
-
-			// If not found add the domain wildcard to the list
-			if !exist {
-				ncc.CertTemplate.DNSNames = append(ncc.CertTemplate.DNSNames, toAdd)
-			}
+		// If not found add the domain wildcard to the list
+		if !exist {
+			ncc.CertTemplate.DNSNames = append(ncc.CertTemplate.DNSNames, toAdd)
 		}
 	}
 }

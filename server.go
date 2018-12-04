@@ -26,6 +26,7 @@ type (
 		Handlers    []Handler
 
 		getHostNameFromAddr FuncGetHostNameFromAddr
+		errChan             chan error
 	}
 )
 
@@ -62,6 +63,7 @@ func NewServer(port uint16, tlsConfig *tls.Config, cert *Certificate, getHostNam
 		Handlers:    []Handler{},
 
 		getHostNameFromAddr: getHostNameFromAddr,
+		errChan:             make(chan error),
 	}
 
 	s.Echo.TLSListener = s
@@ -72,7 +74,9 @@ func NewServer(port uint16, tlsConfig *tls.Config, cert *Certificate, getHostNam
 	httpServer.TLSConfig = tlsConfig
 	httpServer.Addr = addr.String()
 
-	go s.Echo.StartServer(httpServer)
+	go func(e *Server, httpServer *http.Server) {
+		s.errChan <- s.Echo.StartServer(httpServer)
+	}(s, httpServer)
 
 	return s, nil
 }
@@ -153,4 +157,9 @@ func (s *Server) Dial(addr, hostNamePrefix string, timeout time.Duration) (net.C
 	}
 
 	return NewServiceConnector(addr, hostName, s.Certificate, timeout)
+}
+
+// GetErrorChan returns a error channel which pipe error from the server
+func (s *Server) GetErrorChan() chan error {
+	return s.errChan
 }

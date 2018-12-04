@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/alexandrestein/common"
 	"github.com/alexandrestein/securelink"
 )
 
@@ -33,17 +32,7 @@ func TestToken(t *testing.T) {
 				t.SkipNow()
 			}
 
-			conf := securelink.NewDefaultCertificationConfig(nil)
-			conf.CertTemplate = securelink.GetCertTemplate(nil, nil)
-
-			ca, err := securelink.NewCA(conf, "srv")
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			tlsConfig := securelink.GetBaseTLSConfig("srv", ca)
-			var s *securelink.Server
-			s, err = securelink.NewServer(1246, tlsConfig, ca, nil)
+			s, err := testTokenRunServer(t)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -55,32 +44,47 @@ func TestToken(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			var addr *common.Addr
-			var certFromToken *securelink.Certificate
-			addr, certFromToken, err = securelink.ReadToken(token)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			if !reflect.DeepEqual(addr, s.Addr()) {
-				t.Fatalf("the addresses are not equal: %v %v", addr, s.Addr())
-			}
-			var conn net.Conn
-			conn, err = securelink.NewServiceConnector(addr.String(), "srv", certFromToken, time.Second)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			tlsConn := conn.(*securelink.TransportConn)
-			err = tlsConn.Handshake()
-			if err != nil {
-				t.Fatal(err)
-			}
+			testTokenCheckToken(t, token, s.Addr())
 
 			err = s.Close()
 			if err != nil {
 				t.Fatal(err)
 			}
 		})
+	}
+}
+
+func testTokenRunServer(t *testing.T) (*securelink.Server, error) {
+	conf := securelink.NewDefaultCertificationConfig(nil)
+	conf.CertTemplate = securelink.GetCertTemplate(nil, nil)
+
+	ca, err := securelink.NewCA(conf, "srv")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tlsConfig := securelink.GetBaseTLSConfig("srv", ca)
+	return securelink.NewServer(1246, tlsConfig, ca, nil)
+}
+
+func testTokenCheckToken(t *testing.T, token string, addrToCheck net.Addr) {
+	addr, certFromToken, err := securelink.ReadToken(token)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !reflect.DeepEqual(addr, addrToCheck) {
+		t.Fatalf("the addresses are not equal: %v %v", addr, addrToCheck)
+	}
+	var conn net.Conn
+	conn, err = securelink.NewServiceConnector(addr.String(), "srv", certFromToken, time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tlsConn := conn.(*securelink.TransportConn)
+	err = tlsConn.Handshake()
+	if err != nil {
+		t.Fatal(err)
 	}
 }

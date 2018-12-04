@@ -101,7 +101,7 @@ func newTransportConn(conn net.Conn, server bool) (*TransportConn, error) {
 func GetID(addr string, cert *Certificate) (serverID string) {
 	tlsConfig := GetBaseTLSConfig("", cert)
 	tlsConfig.InsecureSkipVerify = true
-	conn, err := tls.Dial("tcp", string(addr), tlsConfig)
+	conn, err := tls.Dial("tcp", addr, tlsConfig)
 	if err != nil {
 		return ""
 	}

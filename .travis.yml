@@ -14,9 +14,13 @@ services:
 
 env:
  - GO111MODULE=on
+ - CODECLIMATE_API_HOST=https://codebeat.co/webhooks/code_coverage
+ - CODECLIMATE_REPO_TOKEN=bdcbeb55-fa63-4a0f-93b6-14561f22a37d
 
 install:
+  - npm install -g codeclimate-test-reporter
   - go get -v ./...
 
 script:
-  - go test -race -v -cover ./...
+  - go test -race -v -cover -coverprofile=coverage.out ./...
+  - codeclimate-test-reporter < coverage.out

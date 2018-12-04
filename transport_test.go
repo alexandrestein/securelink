@@ -211,7 +211,7 @@ func httpFallback(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	s.Echo.GET("/", func(c echo.Context) error {
+	s.Services.Echo.GET("/", func(c echo.Context) error {
 		return c.String(200, "OK")
 	})
 

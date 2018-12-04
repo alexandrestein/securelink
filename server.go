@@ -18,15 +18,23 @@ type (
 	// Server provides a good way to have many services on one sign open port.
 	// Regester services which are selected with a tls host name prefix.
 	Server struct {
-		Echo        *echo.Echo
-		AddrStruct  *common.Addr
-		TLSListener net.Listener
-		Certificate *Certificate
-		TLSConfig   *tls.Config
-		Handlers    []Handler
+		Services *Services
+		TLS      *TLS
 
 		getHostNameFromAddr FuncGetHostNameFromAddr
 		errChan             chan error
+	}
+
+	TLS struct {
+		Listener    net.Listener
+		Certificate *Certificate
+		Config      *tls.Config
+	}
+
+	Services struct {
+		Echo       *echo.Echo
+		AddrStruct *common.Addr
+		Handlers   []Handler
 	}
 )
 
@@ -55,27 +63,31 @@ func NewServer(port uint16, tlsConfig *tls.Config, cert *Certificate, getHostNam
 	}
 
 	s := &Server{
-		Echo:        echo.New(),
-		AddrStruct:  addr,
-		TLSListener: tlsListener,
-		Certificate: cert,
-		TLSConfig:   tlsConfig,
-		Handlers:    []Handler{},
+		Services: &Services{
+			Echo:       echo.New(),
+			AddrStruct: addr,
+			Handlers:   []Handler{},
+		},
+		TLS: &TLS{
+			Listener:    tlsListener,
+			Certificate: cert,
+			Config:      tlsConfig,
+		},
 
 		getHostNameFromAddr: getHostNameFromAddr,
 		errChan:             make(chan error),
 	}
 
-	s.Echo.TLSListener = s
-	s.Echo.HideBanner = true
-	s.Echo.HidePort = true
+	s.Services.Echo.TLSListener = s
+	s.Services.Echo.HideBanner = true
+	s.Services.Echo.HidePort = true
 
 	httpServer := new(http.Server)
 	httpServer.TLSConfig = tlsConfig
 	httpServer.Addr = addr.String()
 
 	go func(e *Server, httpServer *http.Server) {
-		s.errChan <- s.Echo.StartServer(httpServer)
+		s.errChan <- s.Services.Echo.StartServer(httpServer)
 	}(s, httpServer)
 
 	return s, nil
@@ -84,7 +96,7 @@ func NewServer(port uint16, tlsConfig *tls.Config, cert *Certificate, getHostNam
 // Accept implements the net.Listener interface
 func (s *Server) Accept() (net.Conn, error) {
 waitForNewConn:
-	conn, err := s.TLSListener.Accept()
+	conn, err := s.TLS.Listener.Accept()
 	if err != nil {
 		return nil, err
 	}
@@ -102,7 +114,7 @@ waitForNewConn:
 	tc, _ := newTransportConn(conn, true)
 
 	if tlsConn.ConnectionState().ServerName != "" {
-		for _, service := range s.Handlers {
+		for _, service := range s.Services.Handlers {
 			if service.Match(tc.ConnectionState().ServerName) {
 				// Gives the hand to the regestred service
 				go service.Handle(tc)
@@ -117,33 +129,33 @@ waitForNewConn:
 
 // Close implements the net.Listener interface
 func (s *Server) Close() error {
-	defer s.Echo.Close()
-	defer s.TLSListener.Close()
+	defer s.Services.Echo.Close()
+	defer s.TLS.Listener.Close()
 
-	err := s.Echo.Close()
+	err := s.Services.Echo.Close()
 	if err != nil {
 		return err
 	}
-	return s.TLSListener.Close()
+	return s.TLS.Listener.Close()
 }
 
 // Addr implements the net.Listener interface
 func (s *Server) Addr() net.Addr {
-	return s.AddrStruct
+	return s.Services.AddrStruct
 }
 
 // RegisterService adds a new service with it's associated math function
 func (s *Server) RegisterService(handler Handler) {
-	s.Handlers = append(s.Handlers, handler)
+	s.Services.Handlers = append(s.Services.Handlers, handler)
 }
 
 // DeregisterService removes a service base on the index
 func (s *Server) DeregisterService(name string) {
-	for i, service := range s.Handlers {
+	for i, service := range s.Services.Handlers {
 		if service.Name() == name {
-			copy(s.Handlers[i:], s.Handlers[i+1:])
-			s.Handlers[len(s.Handlers)-1] = nil // or the zero value of T
-			s.Handlers = s.Handlers[:len(s.Handlers)-1]
+			copy(s.Services.Handlers[i:], s.Services.Handlers[i+1:])
+			s.Services.Handlers[len(s.Services.Handlers)-1] = nil // or the zero value of T
+			s.Services.Handlers = s.Services.Handlers[:len(s.Services.Handlers)-1]
 		}
 	}
 }
@@ -156,7 +168,7 @@ func (s *Server) Dial(addr, hostNamePrefix string, timeout time.Duration) (net.C
 		hostName = fmt.Sprintf("%s.%s", hostNamePrefix, hostName)
 	}
 
-	return NewServiceConnector(addr, hostName, s.Certificate, timeout)
+	return NewServiceConnector(addr, hostName, s.TLS.Certificate, timeout)
 }
 
 // GetErrorChan returns a error channel which pipe error from the server

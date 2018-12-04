@@ -20,9 +20,9 @@ type (
 
 // GetToken returns a string representation of a temporary token (10 minutes validity)
 func (s *Server) GetToken() (string, error) {
-	certConfig := NewDefaultCertificationConfigWithDefaultTemplate(s.Certificate, "TOKEN")
+	certConfig := NewDefaultCertificationConfigWithDefaultTemplate(s.TLS.Certificate, "TOKEN")
 	certConfig.LifeTime = time.Minute * 5
-	tmpCert, err := s.Certificate.NewCert(certConfig)
+	tmpCert, err := s.TLS.Certificate.NewCert(certConfig)
 	if err != nil {
 		return "", err
 	}
@@ -34,7 +34,7 @@ func (s *Server) GetToken() (string, error) {
 	}
 
 	tokenObj := &token{
-		A: s.AddrStruct,
+		A: s.Services.AddrStruct,
 		C: tmpCertAsBytes,
 	}
 

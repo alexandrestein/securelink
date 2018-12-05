@@ -1,21 +1,22 @@
 language: go
-
 go:
-  - "1.11.x"
-  - master
-
+- 1.11.x
+- master
 os:
-  - linux
-  - osx
-
+- linux
+- osx
 services:
-  - securelink
-
+- securelink
 install:
-  - npm install -g codeclimate-test-reporter
-  - go get -v ./...
-
+- go get golang.org/x/tools/cmd/cover
+- go get github.com/mattn/goveralls
+- go get -v ./...
 script:
-  # - go test -race -v -cover -coverprofile=cov.out
-  # - codeclimate-test-reporter < cov.out
-  - ./test_script.sh
+- go test -race -v -covermode=count -coverprofile=coverage.out ./...
+- $HOME/gopath/bin/goveralls -coverprofile=coverage.out -service=travis-ci -repotoken $COVERALLS_TOKEN
+env:
+  global:
+    - GO111MODULE=on
+
+    # Provides the coveralls.io token $COVERALLS_TOKEN
+    - secure=ELl6P/zp4Ta2hbN50Gr+of/Avd0j1PEyK3H5polkcqN6Pi6XVhj/fm+PmPcgBen3YjECGDCa09Oh/bUcGL3oNAZ1pdidYmH65/ed/fdeshWOCXdaxlVgmYNBNYQWAlvVGSMVjXtBRdvxt08t4K/DmoZftD4c5dvkcO0j5DVDablIxxhQd4D1kTIbCghK7w3pHmzPe/2EbUDteiX/MdW0Z7jkWqR70HGLSuKDDKjdDUe5TQA10DUTBHdfbe65lHIpnWmpn62aE85/5lbc1aLBZzjYYuxFoDW1uMkFng12nl6M4ZhSMJtmOZXW6Ri1byIvY2sKLlbdRnd5cBSx7VqDvNZ9Mn4iYK+lm0B1zrjkVYn88BizH/U1fTg/uWZtMdiymUwj3nX0/1E8SRu2Qb8ykWpJphuNyhImcoMVHjyNsWPgCZKna2Y4HNEcQrwckkNAkeDlWCO6jRuh+fUPCVTA/XZ5d3bgbntPXFAzbOmXniKjF42odFVF+iDmh73DI7NMbI+voghEEzCZhcc7nD3SNSBcclarmmRJyEq9P6C5jHOiPpnVPomcXj37ebA94u8+PSi8tpdXPQXbFLsByx/hbMxz7KEaP/iMK/NNeZFF90w27SsgEVyT4V/VXmT/ZQUPskBFOPSdMwv0+e3NZC8b25wrLAo7VSyWFY5xNtHi/ps=

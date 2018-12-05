@@ -1,22 +1,23 @@
 language: go
 go:
-- 1.11.x
-- master
+  - 1.11.x
+  - master
 os:
-- linux
-- osx
+  - linux
+  - osx
 services:
-- securelink
+- secureli  nk
 install:
-- go get golang.org/x/tools/cmd/cover
-- go get github.com/mattn/goveralls
-- go get -v ./...
+  - go get golang.org/x/tools/cmd/cover
+  - go get github.com/mattn/goveralls
+  - go get -v ./...
 script:
-- go test -v -covermode=count -coverprofile=coverage.out ./...
-- $HOME/gopath/bin/goveralls -coverprofile=coverage.out -service=travis-ci -repotoken $COVERALLS_TOKEN
+  - echo $COVERALLS_TOKEN
+
+  - go test -v -covermode=count -coverprofile=coverage.out ./...
+  - $HOME/gopath/bin/goveralls -coverprofile=coverage.out -service=travis-ci -repotoken $COVERALLS_TOKEN
 env:
   global:
-    - GO111MODULE=on
-
+    - GO111MODULE: "on"
     # Provides the coveralls.io token $COVERALLS_TOKEN
-    - secure=ELl6P/zp4Ta2hbN50Gr+of/Avd0j1PEyK3H5polkcqN6Pi6XVhj/fm+PmPcgBen3YjECGDCa09Oh/bUcGL3oNAZ1pdidYmH65/ed/fdeshWOCXdaxlVgmYNBNYQWAlvVGSMVjXtBRdvxt08t4K/DmoZftD4c5dvkcO0j5DVDablIxxhQd4D1kTIbCghK7w3pHmzPe/2EbUDteiX/MdW0Z7jkWqR70HGLSuKDDKjdDUe5TQA10DUTBHdfbe65lHIpnWmpn62aE85/5lbc1aLBZzjYYuxFoDW1uMkFng12nl6M4ZhSMJtmOZXW6Ri1byIvY2sKLlbdRnd5cBSx7VqDvNZ9Mn4iYK+lm0B1zrjkVYn88BizH/U1fTg/uWZtMdiymUwj3nX0/1E8SRu2Qb8ykWpJphuNyhImcoMVHjyNsWPgCZKna2Y4HNEcQrwckkNAkeDlWCO6jRuh+fUPCVTA/XZ5d3bgbntPXFAzbOmXniKjF42odFVF+iDmh73DI7NMbI+voghEEzCZhcc7nD3SNSBcclarmmRJyEq9P6C5jHOiPpnVPomcXj37ebA94u8+PSi8tpdXPQXbFLsByx/hbMxz7KEaP/iMK/NNeZFF90w27SsgEVyT4V/VXmT/ZQUPskBFOPSdMwv0+e3NZC8b25wrLAo7VSyWFY5xNtHi/ps=
+    - secure: MT+0t5A5o8a5dEc7oqNmY3l1SSn86wH8uRvzwAS6j493pJ0sO7o0OUsJfFX7Z4fbBbQp3JCmZEdAW+5umxlcTkTyudxPw3NAnvG0Q/DwfOlfL10gv60+F/hHw9vfHKu/bLpQWe1D9fqeb5gMwUXBVBxRiTDD48Aym6eEeR10y8M7jDTcKLUzOz6DKiL33f/fEWZFWmSamu+X4Wm4UGlW5lt8FoA7dOnYgbg+ABNefjp8rnV3/pnL86hwDxYmK/r/9Ia/XqVKHKkdJKGnEAiQHX03+/Hg8FVzrvElNTAK31KIkUXfGXGAY46AG65EAkgMB5GsBi0JqL4z+DYWNvWnpw/hc1eRZXNzBYuKkkYjieaUj9aKcGSE4tnCn3c8R8In/wEMHM+OrG4XAXMSet9X7eWWloNdnrFgR2YhVLTPJ8ZRXuqPqr/7zFXzyeljXdVvt3nsGHDpKuuB77Txon6n+LHc9KtluvDo9fNFMkpInCyCBDkRmUVeA4xSTiEBhR5d1egbuoVJySXbvBc71MFEOoqmMPLCHoh27Qzi7lTuoudS3CMyXqQ+CO5hPY+9yr2TBWcWhMwBmPHK36FKjVTbcSK+za9/mAyGWmkSrd2yQ/cgtixoD/Lno/rDPk40/v/d02mWtDwaUpdopO7g42y7xGBzD7KtVQ6DlY8HKvKTeW0=

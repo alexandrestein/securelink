@@ -1,4 +1,4 @@
-# securelink [![codebeat badge](https://codebeat.co/badges/bdcbeb55-fa63-4a0f-93b6-14561f22a37d)](https://codebeat.co/projects/github-com-alexandrestein-securelink-master)
+# securelink [![codebeat badge](https://codebeat.co/badges/bdcbeb55-fa63-4a0f-93b6-14561f22a37d)](https://codebeat.co/projects/github-com-alexandrestein-securelink-master)[![Build Status](https://travis-ci.org/alexandrestein/securelink.svg?branch=master)](https://travis-ci.org/alexandrestein/securelink)[![Coverage Status](https://coveralls.io/repos/github/alexandrestein/securelink/badge.svg)](https://coveralls.io/github/alexandrestein/securelink)
 
 **Securelink** tries to provides an easy to use and efficient way to use multiple interconnected services without the need to open and to manage many open ports.
 

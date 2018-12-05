@@ -50,15 +50,6 @@ var (
 	DefaultRSAKeyLength = KeyLengthRsa3072
 )
 
-// var (
-// 	jwtNewNodeAudience  = "newClient"
-// 	jwtNewNodeExpiresAt = func() int64 { return time.Now().Add(securecache.CacheValueWaitingRequestsTimeOut).Unix() }
-// 	jwtNewNodeID        = uuid.NewV4().String
-// 	jwtNewNodeIssuedAt  = func() int64 { return time.Now().Unix() }
-// 	jwtNewNodeNotBefore = jwtNewNodeIssuedAt
-// 	jwtNewNodeSubject   = "go-DB"
-// )
-
 // Those variables defines the most common package errors
 var (
 	ErrKeyConfigNotCompatible = fmt.Errorf("the key type and key size are not compatible")
@@ -88,7 +79,7 @@ func GetCertTemplate(names []string, ips []net.IP) *x509.Certificate {
 		// BasicConstraintsValid indicates whether IsCA, MaxPathLen,
 		// and MaxPathLenZero are valid.
 		BasicConstraintsValid: true,
-		IsCA: false,
+		IsCA:                  false,
 
 		// MaxPathLen and MaxPathLenZero indicate the presence and
 		// value of the BasicConstraints' "pathLenConstraint".

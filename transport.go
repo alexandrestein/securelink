@@ -46,7 +46,7 @@ type (
 	}
 )
 
-// NewHandler builds a new Hanlder pointer to use in a server object
+// NewHandler builds a new Handler pointer to use in a server object
 func NewHandler(name string, serviceMatchFunc FuncServiceMatch, handlerFunction FuncHandler) Handler {
 	return &BaseHandler{
 		NameField:      name,
@@ -139,6 +139,7 @@ func NewBaseListener(addr net.Addr) *BaseListener {
 // Accept implements the net.Listener interface
 func (l *BaseListener) Accept() (net.Conn, error) {
 	conn := <-l.AcceptChan
+	fmt.Println("accepted", conn)
 	return conn, nil
 }
 

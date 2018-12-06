@@ -4,11 +4,10 @@ import (
 	"fmt"
 	"net"
 	"time"
-
-	"github.com/hashicorp/raft"
 )
 
 func (t *Transport) Accept() (net.Conn, error) {
+	fmt.Println("accept")
 	conn, ok := <-t.AcceptChan
 	if !ok {
 		return nil, fmt.Errorf("looks close")
@@ -24,6 +23,31 @@ func (t *Transport) Close() error {
 	return t.Server.Close()
 }
 
-func (t *Transport) Dial(address raft.ServerAddress, timeout time.Duration) (net.Conn, error) {
-	return t.Server.Dial(string(address), HostPrefix, timeout)
+func (t *Transport) Dial(destID uint64, timeout time.Duration) (net.Conn, error) {
+	for _, peer := range t.Peers {
+		if peer.ID == destID {
+			return t.Server.Dial(peer.String(), HostPrefix, timeout)
+		}
+	}
+
+	return nil, fmt.Errorf("ID not found")
+}
+
+func (t *Transport) SendTo(destID uint64, message []byte) error {
+	conn, err := t.Dial(destID, time.Second)
+	if err != nil {
+		return err
+	}
+
+	var n int
+	n, err = conn.Write(message)
+	if err != nil {
+		return err
+	}
+
+	if n != len(message) {
+		return fmt.Errorf("message not totally sent, missing %d", len(message)-n)
+	}
+
+	return nil
 }

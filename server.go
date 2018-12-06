@@ -5,6 +5,7 @@ package securelink
 import (
 	"crypto/tls"
 	"fmt"
+	"math/big"
 	"net"
 	"net/http"
 	"time"
@@ -91,6 +92,11 @@ func NewServer(port uint16, tlsConfig *tls.Config, cert *Certificate, getHostNam
 	go func(e *Server, httpServer *http.Server) { s.errChan <- s.Services.Echo.StartServer(httpServer) }(s, httpServer)
 
 	return s, nil
+}
+
+// ID returns an id as big.Int pointer
+func (s *Server) ID() *big.Int {
+	return s.TLS.Certificate.ID()
 }
 
 // Accept implements the net.Listener interface

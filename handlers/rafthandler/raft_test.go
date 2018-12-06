@@ -22,35 +22,38 @@ func TestRaft(t *testing.T) {
 	s1, service1 := startNode(t, cert1, 3121, nil)
 	defer s1.Close()
 
-	conf = securelink.NewDefaultCertificationConfig(nil)
-	conf.CertTemplate = securelink.GetCertTemplate(nil, nil)
-	cert2, _ := ca.NewCert(conf, "2")
-	// s2, service2 := startNode(t, cert2, 3122, nil)
-	s2, service2 := startNode(t, cert2, 3122, []raft.Server{
-		rafthandler.BuildRaftServer(cert1.ID().String(), ":3121", raft.Voter),
-	})
-	defer s2.Close()
+	fmt.Println("s", s1)
+	fmt.Println("ss", service1)
 
-	conf = securelink.NewDefaultCertificationConfig(nil)
-	conf.CertTemplate = securelink.GetCertTemplate(nil, nil)
-	cert3, _ := ca.NewCert(conf, "3")
-	// s3, service3 := startNode(t, cert3, 3123, nil)
-	s3, service3 := startNode(t, cert3, 3123, []raft.Server{
-		rafthandler.BuildRaftServer(cert1.ID().String(), ":3121", raft.Voter),
-		rafthandler.BuildRaftServer(cert2.ID().String(), ":3122", raft.Voter),
-	})
-	defer s3.Close()
+	// conf = securelink.NewDefaultCertificationConfig(nil)
+	// conf.CertTemplate = securelink.GetCertTemplate(nil, nil)
+	// cert2, _ := ca.NewCert(conf, "2")
+	// // s2, service2 := startNode(t, cert2, 3122, nil)
+	// s2, service2 := startNode(t, cert2, 3122, []raft.Server{
+	// 	rafthandler.BuildRaftServer(cert1.ID().String(), ":3121", raft.Voter),
+	// })
+	// defer s2.Close()
 
-	fmt.Println(s1, s2, s3)
-	fmt.Println(service1, service2, service3)
+	// conf = securelink.NewDefaultCertificationConfig(nil)
+	// conf.CertTemplate = securelink.GetCertTemplate(nil, nil)
+	// cert3, _ := ca.NewCert(conf, "3")
+	// // s3, service3 := startNode(t, cert3, 3123, nil)
+	// s3, service3 := startNode(t, cert3, 3123, []raft.Server{
+	// 	rafthandler.BuildRaftServer(cert1.ID().String(), ":3121", raft.Voter),
+	// 	rafthandler.BuildRaftServer(cert2.ID().String(), ":3122", raft.Voter),
+	// })
+	// defer s3.Close()
 
-	service1.Raft.AddVoter(raft.ServerID(s2.TLS.Certificate.ID().String()), raft.ServerAddress("127.0.0.1:3122"), 0, time.Second)
-	service1.Raft.AddVoter(raft.ServerID(s3.TLS.Certificate.ID().String()), raft.ServerAddress("127.0.0.1:3123"), 0, time.Second)
+	// fmt.Println(s1, s2, s3)
+	// fmt.Println(service1, service2, service3)
 
-	time.Sleep(time.Second * 5)
+	// service1.Raft.AddVoter(raft.ServerID(s2.TLS.Certificate.ID().String()), raft.ServerAddress("127.0.0.1:3122"), 0, time.Second)
+	// service1.Raft.AddVoter(raft.ServerID(s3.TLS.Certificate.ID().String()), raft.ServerAddress("127.0.0.1:3123"), 0, time.Second)
 
-	fmt.Println("service1.Raft.GetConfiguration().Configuration().Servers", service1.Raft.GetConfiguration().Configuration().Servers)
-	fmt.Println("service3.Raft.GetConfiguration().Configuration().Servers", service3.Raft.GetConfiguration().Configuration().Servers)
+	time.Sleep(time.Second * 15)
+
+	// fmt.Println("service1.Raft.GetConfiguration().Configuration().Servers", service1.Raft.GetConfiguration().Configuration().Servers)
+	// fmt.Println("service3.Raft.GetConfiguration().Configuration().Servers", service3.Raft.GetConfiguration().Configuration().Servers)
 }
 
 func startNode(t *testing.T, cert *securelink.Certificate, port uint16, servers []raft.Server) (*securelink.Server, *rafthandler.Handler) {
@@ -71,16 +74,16 @@ func startNode(t *testing.T, cert *securelink.Certificate, port uint16, servers 
 		t.Fatal(err)
 	}
 
-	notifyChan := make(chan bool)
-	go func() {
-		for {
-			bool := <-notifyChan
-			fmt.Println("notify", port, bool)
-		}
-	}()
+	// notifyChan := make(chan bool)
+	// go func() {
+	// 	for {
+	// 		bool := <-notifyChan
+	// 		fmt.Println("notify", port, bool)
+	// 	}
+	// }()
 
-	tt := newTT()
-	err = raftService.Start(cert.ID().String(), tt, true, servers, notifyChan)
+	// tt := newTT()
+	err = raftService.Raft.Start(true, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -109,9 +112,9 @@ func (a *addr) String() string {
 	return fmt.Sprintf(":%d", a.port)
 }
 
-func newTT() *testTransport {
-	return &testTransport{
-		raft.NewInmemStore(),
-		raft.NewDiscardSnapshotStore(),
-	}
-}
+// func newTT() *testTransport {
+// 	return &testTransport{
+// 		raft.NewInmemStore(),
+// 		raft.NewDiscardSnapshotStore(),
+// 	}
+// }

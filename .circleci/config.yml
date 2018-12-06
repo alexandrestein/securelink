@@ -5,6 +5,7 @@ version: 2
 jobs:
   build:
     environment:
+      GO111MODULE: "on"
       CC_TEST_REPORTER_ID: bcd46c715e15916957cd47309c2afbbd9b3bbe7fb5a36df56eed5abf6975da67
     docker:
       # specify the version

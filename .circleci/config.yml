@@ -26,13 +26,8 @@ jobs:
 
       # specify any bash command here prefixed with `run: `
       - run: go get -v -t -d ./...
-      - run: go -race -cover test -v ./...
+      - run: go test -race -cover -coverprofile=coverage.out -v ./...
 
-      - run:
-          name: Setup dependencies
-          command: |
-            sudo composer self-update
-            composer install -n --prefer-dist
       - run:
           name: "Setup Code Climate test-reporter"
           command: |
@@ -42,9 +37,5 @@ jobs:
       - run:
           name: "Run tests"
           command: |
-            sudo docker-php-ext-enable xdebug
-            # notify Code Climate of a pending test report using `before-build`
-            ./cc-test-reporter before-build
-            sudo vendor/bin/phpunit --coverage-clover clover.xml
             # upload test report to Code Climate using `after-build`
-            ./cc-test-reporter after-build --coverage-input-type clover --exit-code $?
+            ./cc-test-reporter after-build --coverage-input-type clover --input coverage.out --exit-code $?

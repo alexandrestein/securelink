@@ -3,6 +3,7 @@ package rafthandler
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"math/big"
@@ -10,10 +11,11 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/alexandrestein/common"
 	"github.com/alexandrestein/securelink"
+	"github.com/alexandrestein/securelink/handlers/echohandler"
 	"github.com/coreos/etcd/raft/raftpb"
 	"github.com/etcd-io/etcd/raft"
+	"github.com/labstack/echo"
 )
 
 const (
@@ -21,6 +23,15 @@ const (
 	// If the node id is XXX the host name provided during handshake will be
 	// <HostPrefix>.XXX.
 	HostPrefix = "raft"
+	// // HostHTTPPrefix is same as above but for HTTP splitter
+	// HostHTTPPrefix = "http-raft"
+)
+
+// Defines the paths for the HTTP API
+const (
+	// GetServerInfo = "/"
+	AddNode = "/addNode"
+	Message = "/message"
 )
 
 var (
@@ -63,27 +74,38 @@ type (
 
 	Transport struct {
 		*securelink.Server
-		*securelink.BaseListener
+		// *securelink.BaseListener
 
-		Peers []*Peer
+		Echo  *echo.Echo
+		Peers *Peers
 	}
 
-	Peer struct {
-		raft.Peer
-		*common.Addr
-	}
-
-	conn struct {
-		net.Conn
-		// wg sync.WaitGroup
-	}
+	// conn struct {
+	// 	net.Conn
+	// 	// wg sync.WaitGroup
+	// }
 )
 
 func New(addr net.Addr, name string, server *securelink.Server) (*Handler, error) {
 	ret := new(Handler)
-	ret.Handler = securelink.NewHandler(name, matchRaftPrefixRegexpFunc, ret.Handle)
+	echoHandler, err := echohandler.New(addr, HostPrefix, server.TLS.Config)
+	if err != nil {
+		return nil, err
+	}
+
+	ret.Handler = echoHandler
+
+	ret.Transport = new(Transport)
+	ret.Transport.Server = server
+	ret.Transport.Echo = echoHandler.Echo
+	ret.Transport.Peers = NewPeers()
 
 	ret.Server = server
+
+	err = ret.initEcho()
+	if err != nil {
+		return nil, err
+	}
 
 	ret.Raft = new(Raft)
 	ret.Raft.ID = ret.Server.ID()
@@ -94,8 +116,7 @@ func New(addr net.Addr, name string, server *securelink.Server) (*Handler, error
 	return ret, nil
 }
 
-func (r *Raft) Start(bootstrap bool, peers []raft.Peer) (err error) {
-	// id := uint64(1)
+func (r *Raft) Start(bootstrap bool) (err error) {
 	id := r.ID.Uint64()
 	c := &raft.Config{
 		ID:              id,
@@ -112,24 +133,15 @@ func (r *Raft) Start(bootstrap bool, peers []raft.Peer) (err error) {
 	if bootstrap {
 		r.Node = raft.StartNode(c, []raft.Peer{{ID: id}})
 	} else {
-		r.Node = raft.StartNode(c, peers)
+		r.Node = raft.StartNode(c, nil)
 	}
 
-	go r.Handler()
-
-	// if bootstrap {
-	// 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
-	// 	defer cancel()
-	// 	err = r.Node.Campaign(ctx)
-	// 	if err != nil {
-	// 		return err
-	// 	}
-	// }
+	go r.raftLoop()
 
 	return err
 }
 
-func (r *Raft) Handler() {
+func (r *Raft) raftLoop() {
 	for {
 		select {
 		case <-r.Ticker.C:
@@ -173,15 +185,12 @@ func (r *Raft) saveToStorage(hardState raftpb.HardState, entries []raftpb.Entry,
 
 func (r *Raft) send(messages []raftpb.Message) {
 	for _, msg := range messages {
-		// Inspect the message (just for fun)
-		fmt.Println("msg: ", raft.DescribeMessage(msg, nil))
-
 		msgAsBytes, err := msg.Marshal()
 		if err != nil {
 			continue
 		}
 
-		err = r.Transport.SendTo(msg.To, msgAsBytes)
+		err = r.Transport.SendMessageTo(msg.To, msgAsBytes)
 		if err != nil {
 			continue
 		}
@@ -201,30 +210,30 @@ func (r *Raft) process(entry raftpb.Entry) {
 	}
 }
 
-func (r *Raft) HandleMessage(conn net.Conn) {
-	buf := make([]byte, 4096)
-	n, err := conn.Read(buf)
-	if err != nil {
-		fmt.Println("r *Raft) HandleMessage", 0, err)
-		return
-	}
+// func (r *Raft) HandleMessage(conn net.Conn) {
+// 	buf := make([]byte, 4096)
+// 	n, err := conn.Read(buf)
+// 	if err != nil {
+// 		fmt.Println("r *Raft) HandleMessage", 0, err)
+// 		return
+// 	}
 
-	buf = buf[:n]
-	msg := raftpb.Message{}
-	err = msg.Unmarshal(buf)
-	if err != nil {
-		fmt.Println("r *Raft) HandleMessage", 1, err)
-		return
-	}
+// 	buf = buf[:n]
+// 	msg := raftpb.Message{}
+// 	err = msg.Unmarshal(buf)
+// 	if err != nil {
+// 		fmt.Println("r *Raft) HandleMessage", 1, err)
+// 		return
+// 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*750)
-	defer cancel()
-	err = r.Node.Step(ctx, msg)
-	if err != nil {
-		fmt.Println("r *Raft) HandleMessage", 2, err)
-		return
-	}
-}
+// 	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*750)
+// 	defer cancel()
+// 	err = r.Node.Step(ctx, msg)
+// 	if err != nil {
+// 		fmt.Println("r *Raft) HandleMessage", 2, err)
+// 		return
+// 	}
+// }
 
 func (r *Raft) Close() {
 	r.Node.Stop()
@@ -232,19 +241,19 @@ func (r *Raft) Close() {
 	r.done <- struct{}{}
 }
 
-func (h *Handler) Handle(conn net.Conn) error {
-	// cc := newConn(conn)
+// func (h *Handler) Handle(conn net.Conn) error {
+// 	// cc := newConn(conn)
 
-	fmt.Println("handle")
+// 	fmt.Println("handle")
 
-	h.Raft.HandleMessage(conn)
+// 	h.Raft.HandleMessage(conn)
 
-	// h.Transport.AcceptChan <- conn
+// 	// h.Transport.AcceptChan <- conn
 
-	// cc.wg.Wait()
+// 	// cc.wg.Wait()
 
-	return nil
-}
+// 	return nil
+// }
 
 // func newConn(regConn net.Conn) *conn {
 // 	ret := &conn{
@@ -256,3 +265,28 @@ func (h *Handler) Handle(conn net.Conn) error {
 
 // 	return ret
 // }
+
+func (r *Raft) AddNode(peer *Peer) error {
+	r.Transport.Peers.AddPeers(peer)
+
+	bytes, err := json.Marshal(peer)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println("ok", 1)
+
+	err = r.Transport.PostJSONToAll(AddNode, bytes)
+	fmt.Println("ok", 2)
+	return err
+}
+
+func (r *Raft) addNode(peer *Peer) error {
+	cc := raftpb.ConfChange{
+		Type: raftpb.ConfChangeAddNode,
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+	defer cancel()
+	return r.Node.ProposeConfChange(ctx, cc)
+}

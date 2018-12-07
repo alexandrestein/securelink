@@ -19,8 +19,9 @@ type (
 	// Server provides a good way to have many services on one sign open port.
 	// Regester services which are selected with a tls host name prefix.
 	Server struct {
-		Services *Services
-		TLS      *TLS
+		AddrStruct *common.Addr
+		Services   *Services
+		TLS        *TLS
 
 		getHostNameFromAddr FuncGetHostNameFromAddr
 		errChan             chan error
@@ -35,9 +36,8 @@ type (
 
 	// Services is related to the handling of the connection
 	Services struct {
-		Echo       *echo.Echo
-		AddrStruct *common.Addr
-		Handlers   []Handler
+		Echo     *echo.Echo
+		Handlers []Handler
 	}
 )
 
@@ -67,9 +67,8 @@ func NewServer(port uint16, tlsConfig *tls.Config, cert *Certificate, getHostNam
 
 	s := &Server{
 		Services: &Services{
-			Echo:       echo.New(),
-			AddrStruct: addr,
-			Handlers:   []Handler{},
+			Echo:     echo.New(),
+			Handlers: []Handler{},
 		},
 		TLS: &TLS{
 			Listener:    tlsListener,
@@ -77,6 +76,7 @@ func NewServer(port uint16, tlsConfig *tls.Config, cert *Certificate, getHostNam
 			Config:      tlsConfig,
 		},
 
+		AddrStruct:          addr,
 		getHostNameFromAddr: getHostNameFromAddr,
 		errChan:             make(chan error),
 	}
@@ -147,7 +147,7 @@ func (s *Server) Close() error {
 
 // Addr implements the net.Listener interface
 func (s *Server) Addr() net.Addr {
-	return s.Services.AddrStruct
+	return s.AddrStruct
 }
 
 // RegisterService adds a new service with it's associated math function

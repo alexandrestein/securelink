@@ -3,7 +3,7 @@ module github.com/alexandrestein/securelink
 require (
 	ekyu.moe/base91 v0.2.3 // indirect
 	github.com/Equim-chan/base91-go v0.2.3
-	github.com/alexandrestein/common v0.0.0-00000000000000-b7cd6da804e
+	github.com/alexandrestein/common v0.0.0-20181206162737-10cafdb8ad54
 	github.com/armon/go-metrics v0.0.0-20180917152333-f0300d1749da // indirect
 	github.com/coreos/etcd v3.3.10+incompatible
 	github.com/davecgh/go-spew v1.1.1 // indirect
@@ -11,6 +11,7 @@ require (
 	github.com/gogo/protobuf v1.1.1 // indirect
 	github.com/hashicorp/go-immutable-radix v1.0.0 // indirect
 	github.com/hashicorp/go-msgpack v0.0.0-20150518234257-fa3f63826f7c // indirect
+	github.com/hashicorp/go-multierror v1.0.0
 	github.com/hashicorp/raft v1.0.0
 	github.com/kr/pretty v0.1.0 // indirect
 	github.com/labstack/echo v3.3.5+incompatible

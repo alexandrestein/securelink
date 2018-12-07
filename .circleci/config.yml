@@ -6,21 +6,11 @@ jobs:
   build:
     environment:
       GO111MODULE: "on"
-      CC_TEST_REPORTER_ID: bcd46c715e15916957cd47309c2afbbd9b3bbe7fb5a36df56eed5abf6975da67
     docker:
       # specify the version
       - image: circleci/golang:latest
       
-      # Specify service dependencies here if necessary
-      # CircleCI maintains a library of pre-built images
-      # documented at https://circleci.com/docs/2.0/circleci-images/
-      # - image: circleci/postgres:9.4
-
-    #### TEMPLATE_NOTE: go expects specific checkout path representing url
-    #### expecting it in the form of
-    ####   /go/src/github.com/circleci/go-tool
-    ####   /go/src/bitbucket.org/circleci/go-tool
-    working_directory: /go/src/github.com/{{ORG_NAME}}/{{REPO_NAME}}
+    working_directory: /go/src/github.com/alexandrestein/securelink
     steps:
       - checkout
 
@@ -28,14 +18,14 @@ jobs:
       - run: go get -v -t -d ./...
       - run: go test -race -cover -coverprofile=coverage.out -v ./...
 
-      - run:
-          name: "Setup Code Climate test-reporter"
-          command: |
-            # download test reporter as a static binary
-            curl -L https://codeclimate.com/downloads/test-reporter/test-reporter-latest-linux-amd64 > ./cc-test-reporter
-            chmod +x ./cc-test-reporter
-      - run:
-          name: "Run tests"
-          command: |
-            # upload test report to Code Climate using `after-build`
-            ./cc-test-reporter after-build --coverage-input-type clover --input coverage.out --exit-code $?
+      # - run:
+      #     name: "Setup Code Climate test-reporter"
+      #     command: |
+      #       # download test reporter as a static binary
+      #       curl -L https://codeclimate.com/downloads/test-reporter/test-reporter-latest-linux-amd64 > ./cc-test-reporter
+      #       chmod +x ./cc-test-reporter
+      # - run:
+      #     name: "Run tests"
+      #     command: |
+      #       # upload test report to Code Climate using `after-build`
+      #       ./cc-test-reporter after-build --coverage-input-type clover --input coverage.out --exit-code $?

@@ -34,7 +34,7 @@ func (s *Server) GetToken() (string, error) {
 	}
 
 	tokenObj := &token{
-		A: s.Services.AddrStruct,
+		A: s.AddrStruct,
 		C: tmpCertAsBytes,
 	}
 

@@ -1,7 +1,7 @@
 package rafthandler
 
 func (h *Handler) initEcho() error {
-	e := h.Transport.Echo
+	e := h.Transport.EchoHandler.Echo
 
 	hh := &httpHandler{h}
 

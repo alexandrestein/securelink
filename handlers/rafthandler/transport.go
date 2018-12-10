@@ -1,6 +1,7 @@
 package rafthandler
 
 import (
+	"bytes"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -11,6 +12,12 @@ import (
 	"github.com/labstack/echo"
 
 	"github.com/alexandrestein/securelink"
+)
+
+var (
+	// DefaultRequestTimeOut is used when no timeout are
+	// specified
+	DefaultRequestTimeOut = time.Second
 )
 
 // func (t *Transport) Accept() (net.Conn, error) {
@@ -31,20 +38,27 @@ import (
 // }
 
 func (t *Transport) Dial(destID uint64, timeout time.Duration) (*http.Client, *Peer, error) {
+	if timeout == 0 {
+		fmt.Println("tmo", timeout)
+		timeout = DefaultRequestTimeOut
+	}
+	fmt.Println("tmo", timeout)
 	for _, peer := range t.Peers.Peers {
 		if peer.ID == destID {
 			// return t.Server.Dial(peer.String(), HostPrefix, timeout)
 			addr := fmt.Sprintf("%s.%d", HostPrefix, peer.ID)
 			fmt.Println("addr", addr)
-			return securelink.NewHTTPSConnector(addr, t.TLS.Certificate), peer, nil
+			cli := securelink.NewHTTPSConnector(addr, t.TLS.Certificate)
+			cli.Timeout = timeout
+			return cli, peer, nil
 		}
 	}
 
 	return nil, nil, fmt.Errorf("ID not found")
 }
 
-func (t *Transport) Get(destID uint64, url string) (*http.Response, error) {
-	cli, peer, err := t.Dial(destID, time.Second)
+func (t *Transport) Get(destID uint64, url string, timeout time.Duration) (*http.Response, error) {
+	cli, peer, err := t.Dial(destID, timeout)
 	if err != nil {
 		return nil, err
 	}
@@ -52,8 +66,8 @@ func (t *Transport) Get(destID uint64, url string) (*http.Response, error) {
 	return cli.Get(peer.BuildURL(url))
 }
 
-func (t *Transport) GetBytes(destID uint64, url string) ([]byte, error) {
-	resp, err := t.Get(destID, url)
+func (t *Transport) GetBytes(destID uint64, url string, timeout time.Duration) ([]byte, error) {
+	resp, err := t.Get(destID, url, timeout)
 	if err != nil {
 		return nil, err
 	}
@@ -62,26 +76,22 @@ func (t *Transport) GetBytes(destID uint64, url string) ([]byte, error) {
 	return ioutil.ReadAll(resp.Body)
 }
 
-func (t *Transport) PostJSON(destID uint64, url string, content []byte) (*http.Response, error) {
-	cli, peer, err := t.Dial(destID, time.Second)
+func (t *Transport) PostJSON(destID uint64, url string, content []byte, timeout time.Duration) (*http.Response, error) {
+	cli, peer, err := t.Dial(destID, timeout)
 	if err != nil {
 		return nil, err
 	}
 
-	// reader := bytes.NewBuffer(content)
-	// reader := bytes.NewReader(content)
-	fmt.Println("dialed", peer.BuildURL(url))
+	reader := bytes.NewBuffer(content)
 	var ret *http.Response
-	ret, err = cli.Post(peer.BuildURL(url), echo.MIMEApplicationJSON, nil)
-	fmt.Println("dialed bis", ret, err)
+	ret, err = cli.Post(peer.BuildURL(url), echo.MIMEApplicationJSON, reader)
 	return ret, err
 }
 
-func (t *Transport) PostJSONToAll(url string, content []byte) error {
-	var globalErr error
+func (t *Transport) PostJSONToAll(url string, content []byte, timeout time.Duration) error {
+	var globalErr *multierror.Error
 	var wg sync.WaitGroup
 	for _, peer := range t.Peers.Peers {
-		fmt.Println("add", peer)
 		if peer.ID == t.ID().Uint64() {
 			continue
 		}
@@ -89,22 +99,18 @@ func (t *Transport) PostJSONToAll(url string, content []byte) error {
 		wg.Add(1)
 		go func(peer *Peer) {
 			defer wg.Done()
-			defer fmt.Println("done")
-			fmt.Println("post")
-			_, err := t.PostJSON(peer.ID, url, content)
-			fmt.Println("posted")
-			multierror.Append(globalErr, err)
+			_, err := t.PostJSON(peer.ID, url, content, timeout)
+			if err != nil {
+				globalErr = multierror.Append(globalErr, err)
+			}
 		}(peer)
 	}
 
-	fmt.Println("wait")
-
 	wg.Wait()
-	fmt.Println("wait done")
-	return globalErr
+	return globalErr.ErrorOrNil()
 }
 
-func (t *Transport) SendMessageTo(destID uint64, message []byte) error {
-	_, err := t.PostJSON(destID, Message, message)
+func (t *Transport) SendMessageTo(destID uint64, message []byte, timeout time.Duration) error {
+	_, err := t.PostJSON(destID, Message, message, timeout)
 	return err
 }

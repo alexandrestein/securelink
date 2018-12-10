@@ -139,8 +139,6 @@ func NewBaseListener(addr net.Addr) *BaseListener {
 // Accept implements the net.Listener interface
 func (l *BaseListener) Accept() (net.Conn, error) {
 	conn := <-l.AcceptChan
-	fmt.Println("accepted", conn)
-	fmt.Printf("accept type %t \n", conn)
 	return conn, nil
 }
 

@@ -15,7 +15,6 @@ import (
 	"github.com/alexandrestein/securelink/handlers/echohandler"
 	"github.com/coreos/etcd/raft/raftpb"
 	"github.com/etcd-io/etcd/raft"
-	"github.com/labstack/echo"
 )
 
 const (
@@ -76,8 +75,8 @@ type (
 		*securelink.Server
 		// *securelink.BaseListener
 
-		Echo  *echo.Echo
-		Peers *Peers
+		EchoHandler *echohandler.Handler
+		Peers       *Peers
 	}
 
 	// conn struct {
@@ -97,7 +96,7 @@ func New(addr net.Addr, name string, server *securelink.Server) (*Handler, error
 
 	ret.Transport = new(Transport)
 	ret.Transport.Server = server
-	ret.Transport.Echo = echoHandler.Echo
+	ret.Transport.EchoHandler = echoHandler
 	ret.Transport.Peers = NewPeers()
 
 	ret.Server = server
@@ -137,6 +136,7 @@ func (r *Raft) Start(bootstrap bool) (err error) {
 	}
 
 	go r.raftLoop()
+	go r.Transport.EchoHandler.Start()
 
 	return err
 }
@@ -161,6 +161,7 @@ func (r *Raft) raftLoop() {
 				if entry.Type == raftpb.EntryConfChange {
 					var cc raftpb.ConfChange
 					cc.Unmarshal(entry.Data)
+					fmt.Println("apply", cc)
 					r.Node.ApplyConfChange(cc)
 				}
 			}
@@ -190,7 +191,7 @@ func (r *Raft) send(messages []raftpb.Message) {
 			continue
 		}
 
-		err = r.Transport.SendMessageTo(msg.To, msgAsBytes)
+		err = r.Transport.SendMessageTo(msg.To, msgAsBytes, 0)
 		if err != nil {
 			continue
 		}
@@ -274,19 +275,19 @@ func (r *Raft) AddNode(peer *Peer) error {
 		return err
 	}
 
-	fmt.Println("ok", 1)
-
-	err = r.Transport.PostJSONToAll(AddNode, bytes)
-	fmt.Println("ok", 2)
+	err = r.Transport.PostJSONToAll(AddNode, bytes, time.Second*10)
 	return err
 }
 
 func (r *Raft) addNode(peer *Peer) error {
 	cc := raftpb.ConfChange{
-		Type: raftpb.ConfChangeAddNode,
+		// ID:   peer.ID,
+		Type:   raftpb.ConfChangeAddNode,
+		NodeID: peer.ID,
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel()
+	r.Node.ApplyConfChange(cc)
 	return r.Node.ProposeConfChange(ctx, cc)
 }

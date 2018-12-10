@@ -79,7 +79,7 @@ func GetCertTemplate(names []string, ips []net.IP) *x509.Certificate {
 		// BasicConstraintsValid indicates whether IsCA, MaxPathLen,
 		// and MaxPathLenZero are valid.
 		BasicConstraintsValid: true,
-		IsCA:                  false,
+		IsCA: false,
 
 		// MaxPathLen and MaxPathLenZero indicate the presence and
 		// value of the BasicConstraints' "pathLenConstraint".

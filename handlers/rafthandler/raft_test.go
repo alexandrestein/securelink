@@ -22,8 +22,6 @@ func TestRaft(t *testing.T) {
 	s1, service1 := startNode(t, cert1, 3121, true)
 	defer s1.Close()
 
-	time.Sleep(time.Second * 1)
-
 	conf = securelink.NewDefaultCertificationConfig(nil)
 	conf.CertTemplate = securelink.GetCertTemplate(nil, nil)
 	cert2, _ := ca.NewCert(conf, "2")
@@ -31,15 +29,20 @@ func TestRaft(t *testing.T) {
 	s2, service2 := startNode(t, cert2, 3122, false)
 	defer s2.Close()
 
-	fmt.Println("s", s1, s2)
+	// fmt.Println("s", s1, s2)
 	fmt.Println("ss", service1, service2)
-	fmt.Println("sdsdd", cert2.ID().String(), s2.ID().String(), service2.Server.ID().String())
+	// fmt.Println("sdsdd", cert2.ID().String(), s2.ID().String(), service2.Server.ID().String())
+
+	time.Sleep(time.Second * 5)
 
 	node2Peer := rafthandler.MakePeer(s2.ID().Uint64(), s2.AddrStruct)
 	err := service1.Raft.AddNode(node2Peer)
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	fmt.Println("NNNN", service1.Raft.Node.Status().Progress)
+	fmt.Println("NNNN", service2.Raft.Node.Status().Progress)
 
 	// conf = securelink.NewDefaultCertificationConfig(nil)
 	// conf.CertTemplate = securelink.GetCertTemplate(nil, nil)

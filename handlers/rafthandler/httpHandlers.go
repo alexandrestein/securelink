@@ -2,7 +2,6 @@ package rafthandler
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -24,14 +23,10 @@ func (h *httpHandler) GetServerInfo(c echo.Context) error {
 
 func (h *httpHandler) AddNode(c echo.Context) error {
 	fmt.Println("get from server")
-	defer c.Request().Body.Close()
-	peerAsBytes, err := ioutil.ReadAll(c.Request().Body)
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err)
-	}
 
 	peer := new(Peer)
-	err = json.Unmarshal(peerAsBytes, peer)
+	err := c.Bind(peer)
+	// err = json.Unmarshal(peerAsBytes, peer)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, err)
 	}

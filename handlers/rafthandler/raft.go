@@ -115,7 +115,7 @@ func New(addr net.Addr, name string, server *securelink.Server) (*Handler, error
 	return ret, nil
 }
 
-func (r *Raft) Start(bootstrap bool) (err error) {
+func (r *Raft) Start() (err error) {
 	id := r.ID.Uint64()
 	c := &raft.Config{
 		ID:              id,
@@ -129,15 +129,29 @@ func (r *Raft) Start(bootstrap bool) (err error) {
 	// r.Ticker = time.NewTicker(time.Second * 10)
 	r.Ticker = time.NewTicker(time.Millisecond * 500)
 
-	if bootstrap {
-		r.Node = raft.StartNode(c, []raft.Peer{{ID: id}})
-	} else {
-		r.Node = raft.StartNode(c, nil)
-	}
+	// raftPeers := []raft.Peer{}
+	// if peers == nil {
+	// 	r.Node = raft.StartNode(c, []raft.Peer{{ID: id}})
+	// } else {
+	// 	r.Node = raft.StartNode(c, peers)
+	// }
+	r.Node = raft.StartNode(c, r.Transport.Peers.ToRaftPeers())
 
 	go r.raftLoop()
 	go r.Transport.EchoHandler.Start()
 
+	return err
+}
+
+func (r *Raft) AddPeer(peer *Peer) error {
+	r.Transport.Peers.AddPeers(peer)
+
+	bytes, err := json.Marshal(peer)
+	if err != nil {
+		return err
+	}
+
+	err = r.Transport.PostJSONToAll(AddNode, bytes, time.Second*5)
 	return err
 }
 
@@ -161,7 +175,6 @@ func (r *Raft) raftLoop() {
 				if entry.Type == raftpb.EntryConfChange {
 					var cc raftpb.ConfChange
 					cc.Unmarshal(entry.Data)
-					fmt.Println("apply", cc)
 					r.Node.ApplyConfChange(cc)
 				}
 			}
@@ -267,19 +280,21 @@ func (r *Raft) Close() {
 // 	return ret
 // }
 
-func (r *Raft) AddNode(peer *Peer) error {
-	r.Transport.Peers.AddPeers(peer)
+// func (r *Raft) AddNode(peer *Peer) error {
+// 	r.Transport.Peers.AddPeers(peer)
 
-	bytes, err := json.Marshal(peer)
-	if err != nil {
-		return err
-	}
+// 	bytes, err := json.Marshal(peer)
+// 	if err != nil {
+// 		return err
+// 	}
 
-	err = r.Transport.PostJSONToAll(AddNode, bytes, time.Second*10)
-	return err
-}
+// 	err = r.Transport.PostJSONToAll(AddNode, bytes, time.Second*2)
+// 	return err
+// }
 
 func (r *Raft) addNode(peer *Peer) error {
+	r.Transport.Peers.AddPeers(peer)
+
 	cc := raftpb.ConfChange{
 		// ID:   peer.ID,
 		Type:   raftpb.ConfChangeAddNode,

@@ -8,7 +8,10 @@ import (
 
 	"github.com/alexandrestein/securelink"
 	"github.com/alexandrestein/securelink/handlers/rafthandler"
-	"github.com/hashicorp/raft"
+)
+
+var (
+	peers = []*rafthandler.Peer{}
 )
 
 func TestRaft(t *testing.T) {
@@ -19,27 +22,42 @@ func TestRaft(t *testing.T) {
 	conf = securelink.NewDefaultCertificationConfig(nil)
 	conf.CertTemplate = securelink.GetCertTemplate(nil, nil)
 	cert1, _ := ca.NewCert(conf, "1")
-	s1, service1 := startNode(t, cert1, 3121, true)
-	defer s1.Close()
-
+	fmt.Printf("s1 %d ID: %x\n", cert1.ID().Uint64(), cert1.ID().Bytes())
 	conf = securelink.NewDefaultCertificationConfig(nil)
 	conf.CertTemplate = securelink.GetCertTemplate(nil, nil)
 	cert2, _ := ca.NewCert(conf, "2")
+	fmt.Printf("s2 %d ID: %x\n", cert2.ID().Uint64(), cert2.ID().Bytes())
+
+	s1, service1 := startServer(t, cert1, 3121)
+	defer s1.Close()
+
+	time.Sleep(time.Millisecond * 2000)
+
 	// s2, service2 := startNode(t, cert2, 3122, nil)
-	s2, service2 := startNode(t, cert2, 3122, false)
+	s2, service2 := startServer(t, cert2, 3122)
 	defer s2.Close()
 
 	// fmt.Println("s", s1, s2)
 	fmt.Println("ss", service1, service2)
 	// fmt.Println("sdsdd", cert2.ID().String(), s2.ID().String(), service2.Server.ID().String())
 
-	time.Sleep(time.Second * 5)
+	// time.Sleep(time.Second * 5)
 
-	node2Peer := rafthandler.MakePeer(s2.ID().Uint64(), s2.AddrStruct)
-	err := service1.Raft.AddNode(node2Peer)
-	if err != nil {
-		t.Fatal(err)
+	peers = []*rafthandler.Peer{
+		rafthandler.MakePeerFromServer(s1),
+		rafthandler.MakePeerFromServer(s2),
 	}
+
+	startRaft(t, service1)
+	startRaft(t, service2)
+
+	// node2Peer := rafthandler.MakePeerFromServer(s2)
+	// err := service1.Raft.AddPeer(node2Peer)
+	// if err != nil {
+	// 	t.Fatal(err)
+	// }
+
+	time.Sleep(time.Second * 15)
 
 	fmt.Println("NNNN", service1.Raft.Node.Status().Progress)
 	fmt.Println("NNNN", service2.Raft.Node.Status().Progress)
@@ -66,7 +84,10 @@ func TestRaft(t *testing.T) {
 	// fmt.Println("service3.Raft.GetConfiguration().Configuration().Servers", service3.Raft.GetConfiguration().Configuration().Servers)
 }
 
-func startNode(t *testing.T, cert *securelink.Certificate, port uint16, bootstrap bool) (*securelink.Server, *rafthandler.Handler) {
+func startNServer(t *testing.T, nb int) ([]*securelink.Server, []*rafthandler.Handler) {
+}
+
+func startServer(t *testing.T, cert *securelink.Certificate, port uint16) (*securelink.Server, *rafthandler.Handler) {
 	// getNameFn := func(s string) string {
 	// 	return securelink.GetID(s, cert)
 	// }
@@ -84,6 +105,8 @@ func startNode(t *testing.T, cert *securelink.Certificate, port uint16, bootstra
 		t.Fatal(err)
 	}
 
+	// peers = append(peers, rafthandler.MakePeerFromServer(s))
+
 	// notifyChan := make(chan bool)
 	// go func() {
 	// 	for {
@@ -93,14 +116,23 @@ func startNode(t *testing.T, cert *securelink.Certificate, port uint16, bootstra
 	// }()
 
 	// tt := newTT()
-	err = raftService.Raft.Start(bootstrap)
-	if err != nil {
-		t.Fatal(err)
-	}
+
+	// err = raftService.Raft.Start()
+	// if err != nil {
+	// 	t.Fatal(err)
+	// }
 
 	s.RegisterService(raftService)
 
 	return s, raftService
+}
+
+func startRaft(t *testing.T, handler *rafthandler.Handler) {
+	handler.Transport.Peers.AddPeers(peers...)
+	err := handler.Raft.Start()
+	if err != nil {
+		t.Fatal(err)
+	}
 }
 
 type (
@@ -108,10 +140,10 @@ type (
 		port uint16
 	}
 
-	testTransport struct {
-		*raft.InmemStore
-		*raft.DiscardSnapshotStore
-	}
+	// testTransport struct {
+	// 	*raft.InmemStore
+	// 	*raft.DiscardSnapshotStore
+	// }
 )
 
 func (a *addr) Network() string {

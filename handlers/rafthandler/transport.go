@@ -39,15 +39,12 @@ var (
 
 func (t *Transport) Dial(destID uint64, timeout time.Duration) (*http.Client, *Peer, error) {
 	if timeout == 0 {
-		fmt.Println("tmo", timeout)
 		timeout = DefaultRequestTimeOut
 	}
-	fmt.Println("tmo", timeout)
-	for _, peer := range t.Peers.Peers {
+	for _, peer := range t.Peers.peers {
 		if peer.ID == destID {
 			// return t.Server.Dial(peer.String(), HostPrefix, timeout)
 			addr := fmt.Sprintf("%s.%d", HostPrefix, peer.ID)
-			fmt.Println("addr", addr)
 			cli := securelink.NewHTTPSConnector(addr, t.TLS.Certificate)
 			cli.Timeout = timeout
 			return cli, peer, nil
@@ -91,7 +88,7 @@ func (t *Transport) PostJSON(destID uint64, url string, content []byte, timeout 
 func (t *Transport) PostJSONToAll(url string, content []byte, timeout time.Duration) error {
 	var globalErr *multierror.Error
 	var wg sync.WaitGroup
-	for _, peer := range t.Peers.Peers {
+	for _, peer := range t.Peers.peers {
 		if peer.ID == t.ID().Uint64() {
 			continue
 		}

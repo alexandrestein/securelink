@@ -2,7 +2,6 @@ package rafthandler
 
 import (
 	"context"
-	"fmt"
 	"io/ioutil"
 	"net/http"
 	"time"
@@ -22,7 +21,6 @@ func (h *httpHandler) GetServerInfo(c echo.Context) error {
 }
 
 func (h *httpHandler) AddNode(c echo.Context) error {
-	fmt.Println("get from server")
 
 	peer := new(Peer)
 	err := c.Bind(peer)

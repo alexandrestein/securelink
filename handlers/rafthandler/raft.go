@@ -1,7 +1,6 @@
 package rafthandler
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -50,6 +49,8 @@ type (
 		Raft   *Raft
 
 		Transport *Transport
+
+		logger raft.Logger
 	}
 
 	Raft struct {
@@ -62,11 +63,13 @@ type (
 
 		storage *raft.MemoryStorage
 
+		logger raft.Logger
+
 		// started bool
 
 		// pstore is a fake implementation of a persistent storage
 		// that will be used side-by-side with the WAL in the raft
-		pstore map[string]string
+		// pstore map[string]string
 	}
 
 	// Storage interface {
@@ -89,7 +92,7 @@ type (
 	// }
 )
 
-func New(addr net.Addr, name string, server *securelink.Server) (*Handler, error) {
+func New(addr net.Addr, name string, server *securelink.Server, logger raft.Logger) (*Handler, error) {
 	ret := new(Handler)
 	echoHandler, err := echohandler.New(addr, HostPrefix, server.TLS.Config)
 	if err != nil {
@@ -104,6 +107,8 @@ func New(addr net.Addr, name string, server *securelink.Server) (*Handler, error
 	ret.Transport.Peers = NewPeers()
 	ret.Transport.Peers.AddPeers(MakePeerFromServer(server))
 
+	ret.logger = logger
+
 	ret.Server = server
 
 	err = ret.initEcho()
@@ -115,7 +120,8 @@ func New(addr net.Addr, name string, server *securelink.Server) (*Handler, error
 	ret.Raft.ID = ret.Server.ID()
 	ret.Raft.storage = raft.NewMemoryStorage()
 	ret.Raft.Transport = ret.Transport
-	ret.Raft.pstore = map[string]string{}
+	ret.Raft.logger = ret.logger
+	// ret.Raft.pstore = map[string]string{}
 
 	go ret.Transport.EchoHandler.Start()
 
@@ -137,9 +143,12 @@ func (r *Raft) Start() (err error) {
 		return ErrNotEnoughNodesForRaftToStart
 	}
 
-	id := r.ID.Uint64()
+	if r.logger == nil {
+		r.logger = newErrLogger(r.Transport.ID().String())
+	}
+
 	c := &raft.Config{
-		ID:              id,
+		ID:              r.ID.Uint64(),
 		ElectionTick:    50,
 		HeartbeatTick:   5,
 		Storage:         r.storage,
@@ -147,6 +156,7 @@ func (r *Raft) Start() (err error) {
 		MaxInflightMsgs: 256,
 		CheckQuorum:     true,
 		PreVote:         true,
+		Logger:          r.logger,
 	}
 
 	r.Ticker = time.NewTicker(time.Millisecond * 50)
@@ -244,8 +254,8 @@ func (r *Raft) process(entry raftpb.Entry) {
 	if entry.Type == raftpb.EntryNormal && entry.Data != nil {
 		log.Println("normal message:", string(entry.Data))
 
-		parts := bytes.SplitN(entry.Data, []byte(":"), 2)
-		r.pstore[string(parts[0])] = string(parts[1])
+		// parts := bytes.SplitN(entry.Data, []byte(":"), 2)
+		// r.pstore[string(parts[0])] = string(parts[1])
 	}
 }
 

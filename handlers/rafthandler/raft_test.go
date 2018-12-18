@@ -17,7 +17,6 @@ var (
 func TestRaft(t *testing.T) {
 	servers, handlers := startNServer(t, 5)
 	defer close(servers)
-	// servers, handlers := startNServer(t, 5)
 
 	time.Sleep(time.Second * 5)
 
@@ -65,7 +64,7 @@ func buildHandler(t *testing.T, ca *securelink.Certificate, nb int) (*securelink
 		t.Fatal(err)
 	}
 
-	raftHandler, err := rafthandler.New(s.Addr(), rafthandler.HostPrefix, s)
+	raftHandler, err := rafthandler.New(s.Addr(), rafthandler.HostPrefix, s, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

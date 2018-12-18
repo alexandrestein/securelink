@@ -21,15 +21,13 @@ func (h *httpHandler) GetServerInfo(c echo.Context) error {
 }
 
 func (h *httpHandler) AddNode(c echo.Context) error {
-
-	peer := new(Peer)
-	err := c.Bind(peer)
-	// err = json.Unmarshal(peerAsBytes, peer)
+	peers := []*Peer{}
+	err := c.Bind(&peers)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, err)
 	}
 
-	err = h.Raft.addNode(peer)
+	err = h.Raft.addNode(peers...)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err)
 	}
@@ -37,7 +35,15 @@ func (h *httpHandler) AddNode(c echo.Context) error {
 	return nil
 }
 
+func (h *httpHandler) Start(c echo.Context) error {
+	return h.Handler.Raft.Start()
+}
+
 func (h *httpHandler) Message(c echo.Context) error {
+	if h.Raft.Node == nil {
+		return ErrRaftNodeNotLoaded
+	}
+
 	messageAsBytes, err := ioutil.ReadAll(c.Request().Body)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err)

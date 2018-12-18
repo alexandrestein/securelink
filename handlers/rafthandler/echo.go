@@ -5,9 +5,10 @@ func (h *Handler) initEcho() error {
 
 	hh := &httpHandler{h}
 
-	e.GET("/", hh.GetServerInfo)
-	e.POST("/addNode", hh.AddNode)
-	e.POST("/message", hh.Message)
+	// e.GET("/", hh.GetServerInfo)
+	e.POST(AddNode, hh.AddNode)
+	e.HEAD(StartNodes, hh.Start)
+	e.POST(Message, hh.Message)
 
 	return nil
 }

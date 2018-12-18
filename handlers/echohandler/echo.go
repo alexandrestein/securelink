@@ -69,3 +69,7 @@ func (h *Handler) Handle(conn net.Conn) error {
 func (h *Handler) Match(serverName string) bool {
 	return h.matchReg.MatchString(serverName)
 }
+
+func (h *Handler) Close() error {
+	return h.Echo.Close()
+}

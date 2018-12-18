@@ -43,7 +43,6 @@ func (t *Transport) Dial(destID uint64, timeout time.Duration) (*http.Client, *P
 	}
 	for _, peer := range t.Peers.peers {
 		if peer.ID == destID {
-			// return t.Server.Dial(peer.String(), HostPrefix, timeout)
 			addr := fmt.Sprintf("%s.%d", HostPrefix, peer.ID)
 			cli := securelink.NewHTTPSConnector(addr, t.TLS.Certificate)
 			cli.Timeout = timeout
@@ -60,7 +59,12 @@ func (t *Transport) Get(destID uint64, url string, timeout time.Duration) (*http
 		return nil, err
 	}
 
-	return cli.Get(peer.BuildURL(url))
+	var resp *http.Response
+	resp, err = cli.Get(peer.BuildURL(url))
+	if resp.StatusCode < 200 || 300 <= resp.StatusCode {
+		return nil, ErrBadResponseCode(resp.StatusCode)
+	}
+	return resp, nil
 }
 
 func (t *Transport) GetBytes(destID uint64, url string, timeout time.Duration) ([]byte, error) {
@@ -80,9 +84,42 @@ func (t *Transport) PostJSON(destID uint64, url string, content []byte, timeout 
 	}
 
 	reader := bytes.NewBuffer(content)
-	var ret *http.Response
-	ret, err = cli.Post(peer.BuildURL(url), echo.MIMEApplicationJSON, reader)
-	return ret, err
+	var resp *http.Response
+	resp, err = cli.Post(peer.BuildURL(url), echo.MIMEApplicationJSON, reader)
+	if resp.StatusCode < 200 || 300 <= resp.StatusCode {
+		return nil, ErrBadResponseCode(resp.StatusCode)
+	}
+	return resp, err
+}
+
+func (t *Transport) HeadToAll(url string, timeout time.Duration) error {
+	var globalErr *multierror.Error
+	var wg sync.WaitGroup
+	for _, peer := range t.Peers.peers {
+		if peer.ID == t.ID().Uint64() {
+			continue
+		}
+
+		wg.Add(1)
+		go func(peer *Peer) {
+			defer wg.Done()
+			cli, _, err := t.Dial(peer.ID, timeout)
+			if err != nil {
+				globalErr = multierror.Append(globalErr, err)
+			}
+
+			var resp *http.Response
+			resp, err = cli.Head(peer.BuildURL(url))
+			if err != nil {
+				globalErr = multierror.Append(globalErr, err)
+			} else if resp.StatusCode < 200 || 300 <= resp.StatusCode {
+				globalErr = multierror.Append(globalErr, ErrBadResponseCode(resp.StatusCode))
+			}
+		}(peer)
+	}
+
+	wg.Wait()
+	return globalErr.ErrorOrNil()
 }
 
 func (t *Transport) PostJSONToAll(url string, content []byte, timeout time.Duration) error {
@@ -108,6 +145,9 @@ func (t *Transport) PostJSONToAll(url string, content []byte, timeout time.Durat
 }
 
 func (t *Transport) SendMessageTo(destID uint64, message []byte, timeout time.Duration) error {
-	_, err := t.PostJSON(destID, Message, message, timeout)
+	resp, err := t.PostJSON(destID, Message, message, timeout)
+	if resp.StatusCode < 200 || 300 <= resp.StatusCode {
+		return ErrBadResponseCode(resp.StatusCode)
+	}
 	return err
 }

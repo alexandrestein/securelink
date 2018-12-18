@@ -15,27 +15,9 @@ import (
 )
 
 var (
-	// DefaultRequestTimeOut is used when no timeout are
-	// specified
+	// DefaultRequestTimeOut is used when no timeout are specified
 	DefaultRequestTimeOut = time.Second
 )
-
-// func (t *Transport) Accept() (net.Conn, error) {
-// 	fmt.Println("accept")
-// 	conn, ok := <-t.AcceptChan
-// 	if !ok {
-// 		return nil, fmt.Errorf("looks close")
-// 	}
-// 	return conn, nil
-// }
-
-// func (t *Transport) Addr() net.Addr {
-// 	return t.Server.Addr()
-// }
-
-// func (t *Transport) Close() error {
-// 	return t.Server.Close()
-// }
 
 func (t *Transport) Dial(destID uint64, timeout time.Duration) (*http.Client, *Peer, error) {
 	if timeout == 0 {
@@ -86,7 +68,9 @@ func (t *Transport) PostJSON(destID uint64, url string, content []byte, timeout 
 	reader := bytes.NewBuffer(content)
 	var resp *http.Response
 	resp, err = cli.Post(peer.BuildURL(url), echo.MIMEApplicationJSON, reader)
-	if resp.StatusCode < 200 || 300 <= resp.StatusCode {
+	if err != nil {
+		return nil, err
+	} else if resp.StatusCode < 200 || 300 <= resp.StatusCode {
 		return nil, ErrBadResponseCode(resp.StatusCode)
 	}
 	return resp, err
@@ -146,7 +130,9 @@ func (t *Transport) PostJSONToAll(url string, content []byte, timeout time.Durat
 
 func (t *Transport) SendMessageTo(destID uint64, message []byte, timeout time.Duration) error {
 	resp, err := t.PostJSON(destID, Message, message, timeout)
-	if resp.StatusCode < 200 || 300 <= resp.StatusCode {
+	if err != nil {
+		return err
+	} else if resp.StatusCode < 200 || 300 <= resp.StatusCode {
 		return ErrBadResponseCode(resp.StatusCode)
 	}
 	return err

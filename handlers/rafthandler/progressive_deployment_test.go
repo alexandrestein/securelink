@@ -71,14 +71,6 @@ func TestProgressiveDeploymentStartTreeNodesAndChangeLeader(t *testing.T) {
 		handler2.Raft.Node.TransferLeadership(ctx, statusFrom1.Lead, newLeader)
 	}
 
-	// fmt.Println("handler1.Raft.Node.Status()", handler1.Raft.Node.Status().RaftState, handler1.Raft.Node.Status())
-	// bs := make([]byte, 8)
-	// binary.BigEndian.PutUint64(bs, handler1.Raft.Node.Status().Lead)
-	// fmt.Printf("handler1.Raft.Node.Lead() %x\n", bs)
-	// fmt.Println("handler1.Raft.Node.Status()", handler1.Raft.Node.Status().RaftState)
-	// fmt.Println("handler2.Raft.Node.Status()", handler2.Raft.Node.Status().RaftState)
-	// fmt.Println("handler3.Raft.Node.Status()", handler3.Raft.Node.Status().RaftState)
-
 	time.Sleep(time.Second * 5)
 
 	if newLeader != handler1.Raft.Node.Status().Lead ||

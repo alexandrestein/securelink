@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"math"
 	"math/big"
 	"net"
@@ -15,6 +14,7 @@ import (
 	"github.com/alexandrestein/securelink/handlers/echohandler"
 	"github.com/coreos/etcd/raft/raftpb"
 	"github.com/etcd-io/etcd/raft"
+	"github.com/labstack/gommon/log"
 )
 
 const (
@@ -50,7 +50,7 @@ type (
 
 		Transport *Transport
 
-		logger raft.Logger
+		Logger *Logger
 	}
 
 	Raft struct {
@@ -63,7 +63,7 @@ type (
 
 		storage *raft.MemoryStorage
 
-		logger raft.Logger
+		Logger *Logger
 
 		// started bool
 
@@ -92,7 +92,7 @@ type (
 	// }
 )
 
-func New(addr net.Addr, name string, server *securelink.Server, logger raft.Logger) (*Handler, error) {
+func New(addr net.Addr, name string, server *securelink.Server, logger *Logger) (*Handler, error) {
 	ret := new(Handler)
 	echoHandler, err := echohandler.New(addr, HostPrefix, server.TLS.Config)
 	if err != nil {
@@ -107,7 +107,7 @@ func New(addr net.Addr, name string, server *securelink.Server, logger raft.Logg
 	ret.Transport.Peers = NewPeers()
 	ret.Transport.Peers.AddPeers(MakePeerFromServer(server))
 
-	ret.logger = logger
+	ret.Logger = logger
 
 	ret.Server = server
 
@@ -120,7 +120,7 @@ func New(addr net.Addr, name string, server *securelink.Server, logger raft.Logg
 	ret.Raft.ID = ret.Server.ID()
 	ret.Raft.storage = raft.NewMemoryStorage()
 	ret.Raft.Transport = ret.Transport
-	ret.Raft.logger = ret.logger
+	ret.Raft.Logger = ret.Logger
 	// ret.Raft.pstore = map[string]string{}
 
 	go ret.Transport.EchoHandler.Start()
@@ -143,8 +143,8 @@ func (r *Raft) Start() (err error) {
 		return ErrNotEnoughNodesForRaftToStart
 	}
 
-	if r.logger == nil {
-		r.logger = newErrLogger(r.Transport.ID().String())
+	if r.Logger == nil {
+		r.Logger = NewLogger(r.Transport.ID().String(), log.ERROR)
 	}
 
 	c := &raft.Config{
@@ -156,7 +156,7 @@ func (r *Raft) Start() (err error) {
 		MaxInflightMsgs: 256,
 		CheckQuorum:     true,
 		PreVote:         true,
-		Logger:          r.logger,
+		Logger:          r.Logger,
 	}
 
 	r.Ticker = time.NewTicker(time.Millisecond * 50)
@@ -175,6 +175,10 @@ func (r *Raft) Start() (err error) {
 }
 
 func (r *Raft) AddPeer(peer *Peer) error {
+	if peer.ID == r.ID.Uint64() {
+		return nil
+	}
+
 	r.Transport.Peers.AddPeers(peer)
 
 	bytes, err := json.Marshal(r.Transport.Peers.GetPeers())
@@ -251,8 +255,9 @@ func (r *Raft) processSnapshot(snapshot raftpb.Snapshot) {
 }
 
 func (r *Raft) process(entry raftpb.Entry) {
+	fmt.Println("process", raft.DescribeEntry(entry, nil))
 	if entry.Type == raftpb.EntryNormal && entry.Data != nil {
-		log.Println("normal message:", string(entry.Data))
+		fmt.Println("normal message:", string(entry.Data))
 
 		// parts := bytes.SplitN(entry.Data, []byte(":"), 2)
 		// r.pstore[string(parts[0])] = string(parts[1])

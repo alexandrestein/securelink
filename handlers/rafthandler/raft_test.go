@@ -8,10 +8,7 @@ import (
 
 	"github.com/alexandrestein/securelink"
 	"github.com/alexandrestein/securelink/handlers/rafthandler"
-)
-
-var (
-	peers = []*rafthandler.Peer{}
+	"github.com/labstack/gommon/log"
 )
 
 func TestRaft(t *testing.T) {
@@ -32,19 +29,25 @@ func startNServer(t *testing.T, nb int) ([]*securelink.Server, []*rafthandler.Ha
 	conf.CertTemplate = securelink.GetCertTemplate(nil, nil)
 	ca, _ := securelink.NewCA(conf, "ca")
 
-	peers := rafthandler.NewPeers()
-
 	servers := make([]*securelink.Server, nb)
 	handlers := make([]*rafthandler.Handler, nb)
 	for i := 0; i < nb; i++ {
 		servers[i], handlers[i] = buildHandler(t, ca, i)
-
-		peers.AddPeers(rafthandler.MakePeerFromServer(servers[i]))
 	}
 
-	for i := 0; i < nb; i++ {
-		startRaft(t, handlers[i], peers.GetPeers())
+	for _, h := range handlers {
+		err := handlers[0].Raft.AddPeer(rafthandler.MakePeerFromServer(h.Server))
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
+
+	fmt.Println("ask for start")
+	err := handlers[0].Raft.Start()
+	if err != nil {
+		t.Fatal(err)
+	}
+	fmt.Println("ask for start DONE")
 
 	return servers, handlers
 }
@@ -64,7 +67,7 @@ func buildHandler(t *testing.T, ca *securelink.Certificate, nb int) (*securelink
 		t.Fatal(err)
 	}
 
-	raftHandler, err := rafthandler.New(s.Addr(), rafthandler.HostPrefix, s, nil)
+	raftHandler, err := rafthandler.New(s.Addr(), rafthandler.HostPrefix, s, rafthandler.NewLogger(ca.ID().String(), log.DEBUG))
 	if err != nil {
 		t.Fatal(err)
 	}

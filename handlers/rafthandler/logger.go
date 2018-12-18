@@ -1,29 +1,30 @@
 package rafthandler
 
 import (
-	"github.com/etcd-io/etcd/raft"
 	"github.com/labstack/gommon/log"
 )
 
 type (
-	errLogger struct {
+	Logger struct {
 		*log.Logger
 	}
 )
 
-func newErrLogger(id string) raft.Logger {
+func NewLogger(id string, level log.Lvl) *Logger {
 	logger := log.New(id)
-	logger.SetLevel(log.ERROR)
+	logger.SetLevel(level)
+	header := "${time_rfc3339} ${level} => ${prefix}->${short_file}:${line}"
+	logger.SetHeader(header)
 
-	ret := &errLogger{
+	ret := &Logger{
 		Logger: logger,
 	}
 	return ret
 }
 
-func (l *errLogger) Warning(v ...interface{}) {
+func (l *Logger) Warning(v ...interface{}) {
 	l.Warn(v...)
 }
-func (l *errLogger) Warningf(format string, v ...interface{}) {
+func (l *Logger) Warningf(format string, v ...interface{}) {
 	l.Warnf(format, v...)
 }

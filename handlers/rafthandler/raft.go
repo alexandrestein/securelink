@@ -61,7 +61,7 @@ type (
 
 		Transport *Transport
 
-		storage *raft.MemoryStorage
+		Storage *raft.MemoryStorage
 
 		Logger *Logger
 
@@ -118,7 +118,7 @@ func New(addr net.Addr, name string, server *securelink.Server, logger *Logger) 
 
 	ret.Raft = new(Raft)
 	ret.Raft.ID = ret.Server.ID()
-	ret.Raft.storage = raft.NewMemoryStorage()
+	ret.Raft.Storage = raft.NewMemoryStorage()
 	ret.Raft.Transport = ret.Transport
 	ret.Raft.Logger = ret.Logger
 	// ret.Raft.pstore = map[string]string{}
@@ -151,7 +151,7 @@ func (r *Raft) Start() (err error) {
 		ID:              r.ID.Uint64(),
 		ElectionTick:    50,
 		HeartbeatTick:   5,
-		Storage:         r.storage,
+		Storage:         r.Storage,
 		MaxSizePerMsg:   math.MaxUint64,
 		MaxInflightMsgs: 256,
 		CheckQuorum:     true,
@@ -186,7 +186,7 @@ func (r *Raft) AddPeer(peer *Peer) error {
 		return err
 	}
 
-	err = r.Transport.PostJSONToAll(AddNode, bytes, time.Second*5)
+	err = r.Transport.PostJSONToAll(AddNode, bytes, DefaultRequestTimeOut)
 	return err
 }
 
@@ -225,14 +225,14 @@ func (r *Raft) raftLoop() {
 }
 
 func (r *Raft) saveToStorage(hardState raftpb.HardState, entries []raftpb.Entry, snapshot raftpb.Snapshot) {
-	r.storage.Append(entries)
+	r.Storage.Append(entries)
 
 	if !raft.IsEmptyHardState(hardState) {
-		r.storage.SetHardState(hardState)
+		r.Storage.SetHardState(hardState)
 	}
 
 	if !raft.IsEmptySnap(snapshot) {
-		r.storage.ApplySnapshot(snapshot)
+		r.Storage.ApplySnapshot(snapshot)
 	}
 }
 
@@ -255,7 +255,7 @@ func (r *Raft) processSnapshot(snapshot raftpb.Snapshot) {
 }
 
 func (r *Raft) process(entry raftpb.Entry) {
-	fmt.Println("process", raft.DescribeEntry(entry, nil))
+	// fmt.Println("process", raft.DescribeEntry(entry, nil))
 	if entry.Type == raftpb.EntryNormal && entry.Data != nil {
 		fmt.Println("normal message:", string(entry.Data))
 

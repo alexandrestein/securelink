@@ -13,7 +13,7 @@ type (
 func NewLogger(id string, level log.Lvl) *Logger {
 	logger := log.New(id)
 	logger.SetLevel(level)
-	header := "${time_rfc3339} ${level} => ${prefix}->${short_file}:${line}"
+	header := "${time_rfc3339} ${level} => ${prefix} -> ${short_file}:${line}"
 	logger.SetHeader(header)
 
 	ret := &Logger{

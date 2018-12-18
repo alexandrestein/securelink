@@ -16,7 +16,7 @@ import (
 
 var (
 	// DefaultRequestTimeOut is used when no timeout are specified
-	DefaultRequestTimeOut = time.Second
+	DefaultRequestTimeOut = time.Second * 2
 )
 
 func (t *Transport) Dial(destID uint64, timeout time.Duration) (*http.Client, *Peer, error) {

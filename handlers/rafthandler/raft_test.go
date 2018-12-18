@@ -1,6 +1,7 @@
 package rafthandler_test
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
 	"testing"
@@ -8,6 +9,7 @@ import (
 
 	"github.com/alexandrestein/securelink"
 	"github.com/alexandrestein/securelink/handlers/rafthandler"
+	"github.com/etcd-io/etcd/raft"
 	"github.com/labstack/gommon/log"
 )
 
@@ -15,13 +17,39 @@ func TestRaft(t *testing.T) {
 	servers, handlers := startNServer(t, 5)
 	defer close(servers)
 
-	time.Sleep(time.Second * 5)
+	time.Sleep(time.Second * 6)
 
-	fmt.Println("status", handlers[0].Raft.Node.Status())
-	fmt.Println("status", handlers[0].Raft.Node.Status().Progress)
+	if handlers[0].Raft.Node.Status().Lead == raft.None {
+		t.Fatalf("no leader for server 1")
+	} else if handlers[0].Raft.Node.Status().Lead != handlers[1].Raft.Node.Status().Lead {
+		t.Fatalf("the leader for server 1 and 2 are not equal %d != %d", handlers[0].Raft.Node.Status().Lead, handlers[1].Raft.Node.Status().Lead)
+	}
 
-	fmt.Println(servers)
-	fmt.Println(handlers)
+	var leader *rafthandler.Handler
+	for _, h := range handlers {
+		if h.Raft.Node.Status().SoftState.RaftState == raft.StateLeader {
+			leader = h
+		}
+	}
+
+	snap, err := leader.Raft.Storage.Snapshot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	fmt.Println(string(snap.Data))
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+	defer cancel()
+	err = leader.Raft.Node.Propose(ctx, []byte("test snap"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	snap, err = leader.Raft.Storage.Snapshot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	fmt.Println(string(snap.Data))
 }
 
 func startNServer(t *testing.T, nb int) ([]*securelink.Server, []*rafthandler.Handler) {
@@ -42,12 +70,10 @@ func startNServer(t *testing.T, nb int) ([]*securelink.Server, []*rafthandler.Ha
 		}
 	}
 
-	fmt.Println("ask for start")
 	err := handlers[0].Raft.Start()
 	if err != nil {
 		t.Fatal(err)
 	}
-	fmt.Println("ask for start DONE")
 
 	return servers, handlers
 }
@@ -67,7 +93,7 @@ func buildHandler(t *testing.T, ca *securelink.Certificate, nb int) (*securelink
 		t.Fatal(err)
 	}
 
-	raftHandler, err := rafthandler.New(s.Addr(), rafthandler.HostPrefix, s, rafthandler.NewLogger(ca.ID().String(), log.DEBUG))
+	raftHandler, err := rafthandler.New(s.Addr(), rafthandler.HostPrefix, s, rafthandler.NewLogger(cert.ID().String(), log.DEBUG))
 	if err != nil {
 		t.Fatal(err)
 	}

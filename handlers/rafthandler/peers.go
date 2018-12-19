@@ -2,7 +2,9 @@ package rafthandler
 
 import (
 	"fmt"
+	"net/http"
 	"sync"
+	"time"
 
 	"github.com/alexandrestein/common"
 	"github.com/alexandrestein/securelink"
@@ -17,6 +19,9 @@ type (
 	Peer struct {
 		raft.Peer
 		*common.Addr
+
+		cli         *http.Client
+		cliDeadline time.Time
 	}
 )
 

@@ -23,11 +23,45 @@ func (t *Transport) Dial(destID uint64, timeout time.Duration) (*http.Client, *P
 	if timeout == 0 {
 		timeout = DefaultRequestTimeOut
 	}
+
 	for _, peer := range t.Peers.peers {
 		if peer.ID == destID {
-			addr := fmt.Sprintf("%s.%d", HostPrefix, peer.ID)
-			cli := securelink.NewHTTPSConnector(addr, t.TLS.Certificate)
-			cli.Timeout = timeout
+			// To know if the peer has been updated
+			updated := false
+			var cli *http.Client
+			// If the cli is nil or the deadline is exceeded
+			if peer.cli == nil || time.Now().After(peer.cliDeadline) {
+				addr := fmt.Sprintf("%s.%d", HostPrefix, peer.ID)
+				cli = securelink.NewHTTPSConnector(addr, t.TLS.Certificate)
+				cli.Timeout = timeout
+
+				// Lock the peers for any concurrent corruption
+				updated = true
+				t.Peers.lock.Lock()
+				peer.cli = cli
+				peer.cliDeadline = time.Now().Add(timeout)
+			} else {
+				// Cli exist and the deadline is not exceeded it returns
+				// the save cli
+				cli = peer.cli
+
+				// It checks if the deadline is not almost passed.
+				// If the deadline is almost passed the (most of the time is gone)
+				// the deadline is updated to the given one.
+				//
+				// this is not done for every call to limit the numbers of lock.
+				// Every peers are lock during this process.
+				if time.Now().After(peer.cliDeadline.Add(-timeout / 2)) {
+					updated = true
+					t.Peers.lock.Lock()
+					peer.cliDeadline = time.Now().Add(timeout)
+				}
+			}
+
+			if updated {
+				t.Peers.lock.Unlock()
+			}
+
 			return cli, peer, nil
 		}
 	}
@@ -54,8 +88,8 @@ func (t *Transport) GetBytes(destID uint64, url string, timeout time.Duration) (
 	if err != nil {
 		return nil, err
 	}
-
 	defer resp.Body.Close()
+
 	return ioutil.ReadAll(resp.Body)
 }
 

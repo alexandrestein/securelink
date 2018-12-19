@@ -12,6 +12,17 @@ import (
 func NewHTTPSConnector(host string, cert *Certificate) *http.Client {
 	return &http.Client{
 		Transport: &http.Transport{
+			Proxy: http.ProxyFromEnvironment,
+			DialContext: (&net.Dialer{
+				Timeout:   30 * time.Second,
+				KeepAlive: 30 * time.Second,
+				DualStack: true,
+			}).DialContext,
+			MaxIdleConns:          100,
+			IdleConnTimeout:       90 * time.Second,
+			TLSHandshakeTimeout:   10 * time.Second,
+			ExpectContinueTimeout: 1 * time.Second,
+
 			TLSClientConfig: GetBaseTLSConfig(host, cert),
 		},
 	}
@@ -28,9 +39,9 @@ func GetBaseTLSConfig(host string, cert *Certificate) *tls.Config {
 		ClientAuth:   tls.RequireAndVerifyClientCert,
 		CurvePreferences: []tls.CurveID{
 			tls.X25519,
-			tls.CurveP256,
 			tls.CurveP384,
 			tls.CurveP521,
+			tls.CurveP256,
 		},
 		MinVersion: tls.VersionTLS12,
 		CipherSuites: []uint16{

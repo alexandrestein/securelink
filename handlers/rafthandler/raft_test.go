@@ -1,7 +1,6 @@
 package rafthandler_test
 
 import (
-	"context"
 	"crypto/tls"
 	"fmt"
 	"testing"
@@ -17,40 +16,13 @@ func TestRaft(t *testing.T) {
 	servers, handlers := startNServer(t, 5)
 	defer close(servers)
 
-	time.Sleep(time.Second * 6)
+	time.Sleep(time.Second * 2)
 
 	if handlers[0].Raft.Node.Status().Lead == raft.None {
 		t.Fatalf("no leader for server 1")
 	} else if handlers[0].Raft.Node.Status().Lead != handlers[1].Raft.Node.Status().Lead {
 		t.Fatalf("the leader for server 1 and 2 are not equal %d != %d", handlers[0].Raft.Node.Status().Lead, handlers[1].Raft.Node.Status().Lead)
 	}
-
-	var leader, nonLeader *rafthandler.Handler
-	for _, h := range handlers {
-		if h.Raft.Node.Status().SoftState.RaftState == raft.StateLeader {
-			leader = h
-		} else {
-			nonLeader = h
-		}
-
-		if leader != nil && nonLeader != nil {
-			break
-		}
-	}
-
-	fmt.Println("Propose", time.Now(), nonLeader.Transport.ID().String())
-	fmt.Println()
-	fmt.Println()
-	fmt.Println()
-	fmt.Println()
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*2)
-	defer cancel()
-	err := nonLeader.Raft.Node.Propose(ctx, []byte(time.Now().Format(time.RFC3339Nano)))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	time.Sleep(time.Second * 3)
 }
 
 func startNServer(t *testing.T, nb int) ([]*securelink.Server, []*rafthandler.Handler) {

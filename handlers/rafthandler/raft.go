@@ -65,31 +65,15 @@ type (
 
 		Logger *Logger
 
-		// started bool
-
-		// pstore is a fake implementation of a persistent storage
-		// that will be used side-by-side with the WAL in the raft
-		// pstore map[string]string
+		Messages chan []byte
 	}
-
-	// Storage interface {
-	// 	raft.LogStore
-	// 	raft.StableStore
-	// 	raft.SnapshotStore
-	// }
 
 	Transport struct {
 		*securelink.Server
-		// *securelink.BaseListener
 
 		EchoHandler *echohandler.Handler
 		Peers       *Peers
 	}
-
-	// conn struct {
-	// 	net.Conn
-	// 	// wg sync.WaitGroup
-	// }
 )
 
 func New(addr net.Addr, name string, server *securelink.Server, logger *Logger) (*Handler, error) {
@@ -121,7 +105,7 @@ func New(addr net.Addr, name string, server *securelink.Server, logger *Logger) 
 	ret.Raft.Storage = raft.NewMemoryStorage()
 	ret.Raft.Transport = ret.Transport
 	ret.Raft.Logger = ret.Logger
-	// ret.Raft.pstore = map[string]string{}
+	ret.Raft.Messages = make(chan []byte, 16)
 
 	go ret.Transport.EchoHandler.Start()
 
@@ -149,8 +133,8 @@ func (r *Raft) Start() (err error) {
 
 	c := &raft.Config{
 		ID:              r.ID.Uint64(),
-		ElectionTick:    50,
-		HeartbeatTick:   5,
+		ElectionTick:    20,
+		HeartbeatTick:   2,
 		Storage:         r.Storage,
 		MaxSizePerMsg:   math.MaxUint64,
 		MaxInflightMsgs: 256,
@@ -200,16 +184,12 @@ func (r *Raft) raftLoop() {
 		case <-r.Ticker.C:
 			r.Node.Tick()
 		case rd := <-r.Node.Ready():
-			// fmt.Println("saveToStorage(rd.HardState, rd.Entries, rd.Snapshot)", rd.HardState, rd.Entries, rd.Snapshot)
 			r.saveToStorage(rd.HardState, rd.Entries, rd.Snapshot)
-			// fmt.Println("send(rd.Messages)", rd.Messages)
 			r.send(rd.Messages)
 			if !raft.IsEmptySnap(rd.Snapshot) {
-				// fmt.Println("processSnapshot(rd.Snapshot)", rd.Snapshot)
 				r.processSnapshot(rd.Snapshot)
 			}
 			for _, entry := range rd.CommittedEntries {
-				// fmt.Println("process(entry)", entry)
 				r.process(entry)
 				if entry.Type == raftpb.EntryConfChange {
 					var cc raftpb.ConfChange
@@ -257,8 +237,7 @@ func (r *Raft) processSnapshot(snapshot raftpb.Snapshot) {
 func (r *Raft) process(entry raftpb.Entry) {
 	// fmt.Println("process", raft.DescribeEntry(entry, nil))
 	if entry.Type == raftpb.EntryNormal && entry.Data != nil {
-		t, _ := time.Parse(time.RFC3339Nano, string(entry.Data))
-		fmt.Println("normal message:", r.Transport.ID().String(), time.Since(t))
+		r.Messages <- entry.Data
 
 		// parts := bytes.SplitN(entry.Data, []byte(":"), 2)
 		// r.pstore[string(parts[0])] = string(parts[1])
@@ -299,56 +278,12 @@ func (r *Raft) StopRaft() {
 
 func (h *Handler) Close() {
 	h.Raft.StopRaft()
+	close(h.Raft.Messages)
 	h.Handler.Close()
 	h.Server.DeregisterService(h.Name())
 }
 
-// func (h *Handler) Handle(conn net.Conn) error {
-// 	// cc := newConn(conn)
-
-// 	fmt.Println("handle")
-
-// 	h.Raft.HandleMessage(conn)
-
-// 	// h.Transport.AcceptChan <- conn
-
-// 	// cc.wg.Wait()
-
-// 	return nil
-// }
-
-// func newConn(regConn net.Conn) *conn {
-// 	ret := &conn{
-// 		Conn: regConn,
-// 		// wg:   sync.WaitGroup{},
-// 	}
-
-// 	// ret.wg.Add(1)
-
-// 	return ret
-// }
-
-// func (r *Raft) AddNode(peer *Peer) error {
-// 	r.Transport.Peers.AddPeers(peer)
-
-// 	bytes, err := json.Marshal(peer)
-// 	if err != nil {
-// 		return err
-// 	}
-
-// 	err = r.Transport.PostJSONToAll(AddNode, bytes, time.Second*2)
-// 	return err
-// }
-
 func (r *Raft) addNode(peers ...*Peer) error {
-	// // Remove local ID if present
-	// for i, peer := range peers {
-	// 	if peer.ID == r.ID.Uint64() {
-	// 		copy(peers[i:], peers[i+1:])
-	// 		peers[len(peers)-1] = nil // or the zero value of T
-	// 		peers = peers[:len(peers)-1]
-	// 	}
-	// }
 	r.Transport.Peers.AddPeers(peers...)
 
 	if r.Node == nil {
@@ -361,7 +296,6 @@ func (r *Raft) addNode(peers ...*Peer) error {
 		}
 
 		cc := raftpb.ConfChange{
-			// ID:   peer.ID,
 			Type:   raftpb.ConfChangeAddNode,
 			NodeID: peer.ID,
 		}

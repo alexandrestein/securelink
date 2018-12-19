@@ -133,6 +133,7 @@ func (t *Transport) HeadToAll(url string, timeout time.Duration) error {
 			} else if resp.StatusCode < 200 || 300 <= resp.StatusCode {
 				globalErr = multierror.Append(globalErr, ErrBadResponseCode(resp.StatusCode))
 			}
+
 		}(peer)
 	}
 

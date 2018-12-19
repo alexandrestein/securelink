@@ -25,31 +25,32 @@ func TestRaft(t *testing.T) {
 		t.Fatalf("the leader for server 1 and 2 are not equal %d != %d", handlers[0].Raft.Node.Status().Lead, handlers[1].Raft.Node.Status().Lead)
 	}
 
-	var leader *rafthandler.Handler
+	var leader, nonLeader *rafthandler.Handler
 	for _, h := range handlers {
 		if h.Raft.Node.Status().SoftState.RaftState == raft.StateLeader {
 			leader = h
+		} else {
+			nonLeader = h
+		}
+
+		if leader != nil && nonLeader != nil {
+			break
 		}
 	}
 
-	snap, err := leader.Raft.Storage.Snapshot()
-	if err != nil {
-		t.Fatal(err)
-	}
-	fmt.Println(string(snap.Data))
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+	fmt.Println("Propose", time.Now(), nonLeader.Transport.ID().String())
+	fmt.Println()
+	fmt.Println()
+	fmt.Println()
+	fmt.Println()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*2)
 	defer cancel()
-	err = leader.Raft.Node.Propose(ctx, []byte("test snap"))
+	err := nonLeader.Raft.Node.Propose(ctx, []byte(time.Now().Format(time.RFC3339Nano)))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	snap, err = leader.Raft.Storage.Snapshot()
-	if err != nil {
-		t.Fatal(err)
-	}
-	fmt.Println(string(snap.Data))
+	time.Sleep(time.Second * 3)
 }
 
 func startNServer(t *testing.T, nb int) ([]*securelink.Server, []*rafthandler.Handler) {

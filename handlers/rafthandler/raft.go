@@ -257,7 +257,8 @@ func (r *Raft) processSnapshot(snapshot raftpb.Snapshot) {
 func (r *Raft) process(entry raftpb.Entry) {
 	// fmt.Println("process", raft.DescribeEntry(entry, nil))
 	if entry.Type == raftpb.EntryNormal && entry.Data != nil {
-		fmt.Println("normal message:", string(entry.Data))
+		t, _ := time.Parse(time.RFC3339Nano, string(entry.Data))
+		fmt.Println("normal message:", r.Transport.ID().String(), time.Since(t))
 
 		// parts := bytes.SplitN(entry.Data, []byte(":"), 2)
 		// r.pstore[string(parts[0])] = string(parts[1])

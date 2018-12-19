@@ -16,7 +16,7 @@ import (
 
 var (
 	// DefaultRequestTimeOut is used when no timeout are specified
-	DefaultRequestTimeOut = time.Second * 2
+	DefaultRequestTimeOut = time.Second * 5
 )
 
 func (t *Transport) Dial(destID uint64, timeout time.Duration) (*http.Client, *Peer, error) {
@@ -142,20 +142,11 @@ func (t *Transport) HeadToAll(url string, timeout time.Duration) error {
 
 	wg.Wait()
 
-	var globalErr *multierror.Error
-notDone:
-	select {
-	case err := <-errChan:
-		globalErr = multierror.Append(globalErr, err)
-		goto notDone
-	default:
-	}
-
-	return globalErr.ErrorOrNil()
+	return t.manageErrorForMultipleRequests(errChan)
 }
 
 func (t *Transport) PostJSONToAll(url string, content []byte, timeout time.Duration) error {
-	var globalErr *multierror.Error
+	errChan := make(chan error, t.Peers.Len())
 	var wg sync.WaitGroup
 	for _, peer := range t.Peers.peers {
 		if peer.ID == t.ID().Uint64() {
@@ -167,12 +158,26 @@ func (t *Transport) PostJSONToAll(url string, content []byte, timeout time.Durat
 			defer wg.Done()
 			_, err := t.PostJSON(peer.ID, url, content, timeout)
 			if err != nil {
-				globalErr = multierror.Append(globalErr, err)
+				errChan <- err
 			}
 		}(peer)
 	}
 
 	wg.Wait()
+
+	return t.manageErrorForMultipleRequests(errChan)
+}
+
+func (t *Transport) manageErrorForMultipleRequests(errChan chan error) error {
+	var globalErr *multierror.Error
+notDone:
+	select {
+	case err := <-errChan:
+		globalErr = multierror.Append(globalErr, err)
+		goto notDone
+	default:
+	}
+
 	return globalErr.ErrorOrNil()
 }
 

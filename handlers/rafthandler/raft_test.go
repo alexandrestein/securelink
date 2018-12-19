@@ -44,6 +44,8 @@ func startNServer(t *testing.T, nb int) ([]*securelink.Server, []*rafthandler.Ha
 		}
 	}
 
+	time.Sleep(time.Second)
+
 	err := handlers[0].Raft.Start()
 	if err != nil {
 		closeServers(servers)

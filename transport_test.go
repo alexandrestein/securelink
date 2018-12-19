@@ -1,6 +1,7 @@
 package securelink_test
 
 import (
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net"
@@ -215,7 +216,12 @@ func httpFallback(t *testing.T) {
 		return c.String(200, "OK")
 	})
 
+	// var cli *http.Client
+	// cli, err  = securelink.NewHTTPSConnector("srv", cliCert)
 	cli := securelink.NewHTTPSConnector("srv", cliCert)
+	if err != nil {
+		t.Fatal(err)
+	}
 	var resp *http.Response
 	resp, err = cli.Get("https://127.0.0.1:7777/")
 	if err != nil {
@@ -227,6 +233,8 @@ func httpFallback(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	fmt.Println("resp.Header", resp.Proto)
 
 	if string(buf) != "OK" {
 		t.Fatalf("the replied value is not what we expect: %q instead of %q", string(buf), "OK")

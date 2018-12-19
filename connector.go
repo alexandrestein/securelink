@@ -5,33 +5,44 @@ import (
 	"net"
 	"net/http"
 	"time"
+
+	"golang.org/x/net/http2"
 )
 
 // NewHTTPSConnector provides a HTTP/S client with custom root CA and with the
 // given client certificate
 func NewHTTPSConnector(host string, cert *Certificate) *http.Client {
-	return &http.Client{
-		Transport: &http.Transport{
-			Proxy: http.ProxyFromEnvironment,
-			DialContext: (&net.Dialer{
-				Timeout:   30 * time.Second,
-				KeepAlive: 30 * time.Second,
-				DualStack: true,
-			}).DialContext,
-			MaxIdleConns:          100,
-			IdleConnTimeout:       90 * time.Second,
-			TLSHandshakeTimeout:   10 * time.Second,
-			ExpectContinueTimeout: 1 * time.Second,
+	tr := &http.Transport{
+		Proxy: http.ProxyFromEnvironment,
+		DialContext: (&net.Dialer{
+			Timeout:   30 * time.Second,
+			KeepAlive: 30 * time.Second,
+			DualStack: true,
+		}).DialContext,
+		MaxIdleConns:          100,
+		IdleConnTimeout:       90 * time.Second,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
 
-			TLSClientConfig: GetBaseTLSConfig(host, cert),
-		},
+		TLSClientConfig: GetBaseTLSConfig(host, cert),
+	}
+
+	// tlsConfig := GetBaseTLSConfig(host, cert)
+
+	// tr := &http2.Transport{
+	// 	TLSClientConfig: tlsConfig,
+	// }
+
+	http2.ConfigureTransport(tr)
+	return &http.Client{
+		Transport: tr,
 	}
 }
 
 // GetBaseTLSConfig returns a TLS configuration with the given certificate as
 // "Certificate" and setup the "RootCAs" with the given certificate CertPool
 func GetBaseTLSConfig(host string, cert *Certificate) *tls.Config {
-	return &tls.Config{
+	conf := &tls.Config{
 		ServerName:   host,
 		Certificates: []tls.Certificate{cert.GetTLSCertificate()},
 		RootCAs:      cert.GetCertPool(),
@@ -43,7 +54,8 @@ func GetBaseTLSConfig(host string, cert *Certificate) *tls.Config {
 			tls.CurveP521,
 			tls.CurveP256,
 		},
-		MinVersion: tls.VersionTLS12,
+		PreferServerCipherSuites: true,
+		MinVersion:               tls.VersionTLS12,
 		CipherSuites: []uint16{
 			tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
 			tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
@@ -52,7 +64,15 @@ func GetBaseTLSConfig(host string, cert *Certificate) *tls.Config {
 			tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,
 			tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305,
 		},
+		// NextProtos: nil,
+		// NextProtos: []string{"http/1.1"},
 	}
+
+	// if server {
+	// 	conf.NextProtos = append(conf.NextProtos, "http/1.1", "h2")
+	// }
+
+	return conf
 }
 
 // NewServiceConnector opens a new connection to the given address. Check the given hostname

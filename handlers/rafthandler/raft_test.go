@@ -1,7 +1,6 @@
 package rafthandler_test
 
 import (
-	"crypto/tls"
 	"fmt"
 	"testing"
 	"time"
@@ -64,7 +63,7 @@ func buildHandler(t *testing.T, ca *securelink.Certificate, nb int) (*securelink
 	port := basePort + uint16(nb)
 
 	tlsConfig := securelink.GetBaseTLSConfig(cert.ID().String(), cert)
-	tlsConfig.ClientAuth = tls.RequireAndVerifyClientCert
+	fmt.Println("0", tlsConfig.NextProtos)
 	s, err := securelink.NewServer(port, tlsConfig, cert, nil)
 	if err != nil {
 		t.Fatal(err)

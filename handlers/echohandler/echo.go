@@ -39,10 +39,14 @@ func New(addr net.Addr, name string, tlsConfig *tls.Config) (*Handler, error) {
 	e.HidePort = true
 	e.TLSListener = li
 
+	// tlsConfig.NextProtos = append(tlsConfig.NextProtos, "h2", "http/1.1")
+
 	httpServer := new(http.Server)
 	httpServer.TLSConfig = tlsConfig
 	httpServer.Addr = addr.String()
 	httpServer.Handler = e
+
+	e.TLSServer = httpServer
 
 	return &Handler{
 		BaseHandler: &securelink.BaseHandler{

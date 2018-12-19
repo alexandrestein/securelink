@@ -17,7 +17,7 @@ func TestMessage(t *testing.T) {
 	waitingDuration := time.Second * 2
 
 	servers, handlers := startNServer(t, nbServers)
-	defer close(servers)
+	defer closeServers(servers)
 
 	time.Sleep(waitingDuration)
 

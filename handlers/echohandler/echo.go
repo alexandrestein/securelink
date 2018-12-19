@@ -34,14 +34,15 @@ func New(addr net.Addr, name string, tlsConfig *tls.Config) (*Handler, error) {
 
 	li := securelink.NewBaseListener(addr)
 
-	httpServer := new(http.Server)
-	httpServer.TLSConfig = tlsConfig
-	httpServer.Addr = addr.String()
-
 	e := echo.New()
 	e.HideBanner = true
 	e.HidePort = true
 	e.TLSListener = li
+
+	httpServer := new(http.Server)
+	httpServer.TLSConfig = tlsConfig
+	httpServer.Addr = addr.String()
+	httpServer.Handler = e
 
 	return &Handler{
 		BaseHandler: &securelink.BaseHandler{
@@ -57,6 +58,7 @@ func New(addr net.Addr, name string, tlsConfig *tls.Config) (*Handler, error) {
 // Start needs to be called after all routes are registered
 func (h *Handler) Start() error {
 	return h.Echo.StartServer(h.httpServer)
+	// return h.httpServer.Serve(h.Echo.TLSListener)
 }
 
 // Handle provides the securelink.Handler interface

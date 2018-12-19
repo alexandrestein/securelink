@@ -111,7 +111,7 @@ func (t *Transport) PostJSON(destID uint64, url string, content []byte, timeout 
 }
 
 func (t *Transport) HeadToAll(url string, timeout time.Duration) error {
-	var globalErr *multierror.Error
+	errChan := make(chan error, t.Peers.Len())
 	var wg sync.WaitGroup
 	for _, peer := range t.Peers.peers {
 		if peer.ID == t.ID().Uint64() {
@@ -123,21 +123,34 @@ func (t *Transport) HeadToAll(url string, timeout time.Duration) error {
 			defer wg.Done()
 			cli, _, err := t.Dial(peer.ID, timeout)
 			if err != nil {
-				globalErr = multierror.Append(globalErr, err)
+				errChan <- err
+				// globalErr = multierror.Append(globalErr, err)
 			}
 
 			var resp *http.Response
 			resp, err = cli.Head(peer.BuildURL(url))
 			if err != nil {
-				globalErr = multierror.Append(globalErr, err)
+				errChan <- err
+				// globalErr = multierror.Append(globalErr, err)
 			} else if resp.StatusCode < 200 || 300 <= resp.StatusCode {
-				globalErr = multierror.Append(globalErr, ErrBadResponseCode(resp.StatusCode))
+				errChan <- ErrBadResponseCode(resp.StatusCode)
+				// globalErr = multierror.Append(globalErr, ErrBadResponseCode(resp.StatusCode))
 			}
 
 		}(peer)
 	}
 
 	wg.Wait()
+
+	var globalErr *multierror.Error
+notDone:
+	select {
+	case err := <-errChan:
+		globalErr = multierror.Append(globalErr, err)
+		goto notDone
+	default:
+	}
+
 	return globalErr.ErrorOrNil()
 }
 

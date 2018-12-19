@@ -36,7 +36,8 @@ type (
 
 	// Services is related to the handling of the connection
 	Services struct {
-		Echo     *echo.Echo
+		Echo *echo.Echo
+		// httpServer *http.Server
 		Handlers []Handler
 	}
 )
@@ -51,7 +52,7 @@ func NewServer(port uint16, tlsConfig *tls.Config, cert *Certificate, getHostNam
 		return nil, err
 	}
 
-	tlsConfig.NextProtos = append(tlsConfig.NextProtos, "h2", "http/1.1")
+	// tlsConfig.NextProtos = append(tlsConfig.NextProtos, "h2", "http/1.1")
 
 	var tlsListener net.Listener
 	tlsListener, err = tls.Listen("tcp", addr.ForListenerBroadcast(), tlsConfig)
@@ -89,7 +90,9 @@ func NewServer(port uint16, tlsConfig *tls.Config, cert *Certificate, getHostNam
 	httpServer.TLSConfig = tlsConfig
 	httpServer.Addr = addr.String()
 
-	go func(e *Server, httpServer *http.Server) { s.errChan <- s.Services.Echo.StartServer(httpServer) }(s, httpServer)
+	go func(e *Server, httpServer *http.Server) {
+		s.errChan <- s.Services.Echo.StartServer(httpServer)
+	}(s, httpServer)
 
 	return s, nil
 }

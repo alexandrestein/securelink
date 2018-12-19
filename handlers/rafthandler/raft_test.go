@@ -14,7 +14,7 @@ import (
 
 func TestRaft(t *testing.T) {
 	servers, handlers := startNServer(t, 5)
-	defer close(servers)
+	defer closeServers(servers)
 
 	time.Sleep(time.Second * 2)
 
@@ -39,12 +39,14 @@ func startNServer(t *testing.T, nb int) ([]*securelink.Server, []*rafthandler.Ha
 	for _, h := range handlers {
 		err := handlers[0].Raft.AddPeer(rafthandler.MakePeerFromServer(h.Server))
 		if err != nil {
+			closeServers(servers)
 			t.Fatal(err)
 		}
 	}
 
 	err := handlers[0].Raft.Start()
 	if err != nil {
+		closeServers(servers)
 		t.Fatal(err)
 	}
 
@@ -82,7 +84,7 @@ func startRaft(t *testing.T, handler *rafthandler.Handler, peers []*rafthandler.
 	}
 }
 
-func close(servers []*securelink.Server) {
+func closeServers(servers []*securelink.Server) {
 	for _, s := range servers {
 		s.Close()
 	}

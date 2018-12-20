@@ -8,6 +8,7 @@ func (h *Handler) initEcho() error {
 	// e.GET("/", hh.GetServerInfo)
 	e.POST(AddNode, hh.AddNode)
 	e.HEAD(StartNodes, hh.Start)
+	e.POST(JoinCluster, hh.Join)
 	e.POST(Message, hh.Message)
 
 	return nil

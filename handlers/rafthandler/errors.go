@@ -10,4 +10,5 @@ var (
 	ErrBadResponseCode              = func(code int) error {
 		return fmt.Errorf("the response code is not between 200 included and 300 exclude but: %d", code)
 	}
+	ErrNotEnoughNodesForRemove = fmt.Errorf("cluster needs to have at least 3 nodes")
 )

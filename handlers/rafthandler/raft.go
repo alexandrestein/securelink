@@ -26,9 +26,12 @@ const (
 // Defines the paths for the HTTP API
 const (
 	// GetServerInfo = "/"
-	AddNode    = "/addNode"
-	StartNodes = "/start"
-	Message    = "/message"
+	AddNode     = "/addNode"
+	RMNode      = "/rmNode"
+	StartNodes  = "/start"
+	JoinCluster = "/join"
+	StopNodes   = "/stop"
+	Message     = "/message"
 )
 
 var (
@@ -54,10 +57,11 @@ type (
 
 	// Raft holds the raft components
 	Raft struct {
-		ID     *big.Int
-		Node   raft.Node
-		Ticker *time.Ticker
-		done   chan struct{}
+		ID      *big.Int
+		Node    raft.Node
+		Ticker  *time.Ticker
+		done    chan struct{}
+		applied uint64
 
 		Transport *Transport
 
@@ -125,7 +129,7 @@ func New(name string, server *securelink.Server, logger *Logger) (*Handler, erro
 // Start starts the raft cluster.
 // To work this must be call on a raft pointer which has at least 3 peers.
 // Peers can be added from other node but the unstarted cluster must have at least 3 nodes.
-func (r *Raft) Start() (err error) {
+func (r *Raft) Start(join bool) error {
 	// If started no need to start the node again.
 	// This will be called multiple times at the startup. Every nodes which get
 	// a start signal will broadcast it to all know hosts.
@@ -142,6 +146,13 @@ func (r *Raft) Start() (err error) {
 		r.Logger = NewLogger(r.Transport.ID().String(), log.ERROR)
 	}
 
+	// applied, err := r.Storage.LastIndex()
+	// if err != nil {
+	// 	return err
+	// } else if applied != 0 {
+	// 	applied = applied - 1
+	// }
+
 	c := &raft.Config{
 		ID:              r.ID.Uint64(),
 		ElectionTick:    20,
@@ -152,15 +163,26 @@ func (r *Raft) Start() (err error) {
 		CheckQuorum:     true,
 		PreVote:         true,
 		Logger:          r.Logger,
+		Applied:         r.applied,
 	}
 
 	r.Ticker = time.NewTicker(time.Millisecond * 50)
 	r.done = make(chan struct{})
 
-	r.Node = raft.StartNode(c, r.Transport.Peers.ToRaftPeers())
+	// If the cluster exist with other nodes
+	peers := []raft.Peer{}
+	if !join {
+		fmt.Println("FRESH !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+		peers = r.Transport.Peers.ToRaftPeers()
+	} else {
+		fmt.Println("JOIN !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+	}
+
+	fmt.Println("new node has peers", peers)
+	r.Node = raft.StartNode(c, peers)
 	go r.raftLoop()
 
-	err = r.Transport.HeadToAll(StartNodes, 0)
+	err := r.Transport.HeadToAll(StartNodes, 0)
 	if err != nil {
 		r.Node.Stop()
 		return err
@@ -184,7 +206,107 @@ func (r *Raft) AddPeer(peer *Peer) error {
 	}
 
 	err = r.Transport.PostJSONToAll(AddNode, bytes, DefaultRequestTimeOut)
-	return err
+	if err != nil {
+		return err
+	}
+
+	// If the local node is not started or the id is the local node
+	if r.Node == nil || peer.ID == r.ID.Uint64() {
+		return nil
+	}
+
+	return r.join(peer.ID)
+}
+
+func (r *Raft) join(peerID uint64) error {
+	cc := raftpb.ConfChange{
+		Type:   raftpb.ConfChangeAddNode,
+		NodeID: peerID,
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+	defer cancel()
+	err := r.Node.ProposeConfChange(ctx, cc)
+	if err != nil {
+		return err
+	}
+
+	var entries []raftpb.Entry
+	var first, last uint64
+	first, err = r.Storage.FirstIndex()
+	if err != nil {
+		return err
+	}
+	last, err = r.Storage.LastIndex()
+	if err != nil {
+		return err
+	}
+	entries, err = r.Storage.Entries(first, last, math.MaxUint64)
+	if err != nil {
+		return err
+	}
+	fmt.Println("entries", entries, first, last)
+
+	hs, _, err := r.Storage.InitialState()
+	if err != nil {
+		return err
+	}
+
+	var hsAsBytes []byte
+	hsAsBytes, err = hs.Marshal()
+	if err != nil {
+		return err
+	}
+
+	joinObj := &struct {
+		HS      []byte
+		Entries [][]byte
+		Applied uint64
+	}{
+		HS:      hsAsBytes,
+		Entries: make([][]byte, len(entries)),
+		Applied: r.Node.Status().Applied,
+	}
+
+	for _, entry := range entries {
+		entryAsBytes, err := entry.Marshal()
+		if err != nil {
+			return err
+		}
+		joinObj.Entries = append(joinObj.Entries, entryAsBytes)
+	}
+
+	var joinObjAsBytes []byte
+	joinObjAsBytes, err = json.Marshal(joinObj)
+	if err != nil {
+		return err
+	}
+
+	_, err = r.Transport.PostJSON(peerID, JoinCluster, joinObjAsBytes, 0)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (r *Raft) RemovePeer(peerID uint64) error {
+	if r.Transport.Peers.Len() <= 3 {
+		return ErrNotEnoughNodesForRemove
+	}
+	if r.Node == nil {
+		return ErrRaftNodeNotLoaded
+	}
+
+	err := r.Transport.PostJSONToAll(RMNode, []byte(fmt.Sprintf("%d", peerID)), DefaultRequestTimeOut)
+	if err != nil {
+		return err
+	}
+
+	r.Transport.Peers.RMPeer(peerID)
+	r.rmNode(peerID)
+
+	return nil
 }
 
 // LocalPeer returns a Peer pointer of the local raft node
@@ -271,26 +393,78 @@ func (h *Handler) Close() {
 }
 
 func (r *Raft) addNode(peers ...*Peer) error {
+	// Clean from already known peers
+	newPeers := []*Peer{}
+	for _, newPeer := range peers {
+		found := false
+		for _, savedPeer := range r.Transport.Peers.GetPeers() {
+			if savedPeer.ID == newPeer.ID {
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			newPeers = append(newPeers, newPeer)
+		}
+	}
+
 	r.Transport.Peers.AddPeers(peers...)
 
 	if r.Node == nil {
 		return nil
 	}
 
-	for _, peer := range peers {
-		if peer.ID == r.ID.Uint64() {
-			continue
-		}
+	// for _, peer := range newPeers {
+	// 	if peer.ID == r.ID.Uint64() {
+	// 		continue
+	// 	}
 
-		cc := raftpb.ConfChange{
-			Type:   raftpb.ConfChangeAddNode,
-			NodeID: peer.ID,
-		}
+	// 	cc := raftpb.ConfChange{
+	// 		Type:   raftpb.ConfChangeAddNode,
+	// 		NodeID: peer.ID,
+	// 	}
 
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
-		defer cancel()
-		r.Node.ApplyConfChange(cc)
-		return r.Node.ProposeConfChange(ctx, cc)
+	// 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+	// 	defer cancel()
+	// 	// r.Node.ApplyConfChange(cc)
+	// 	return r.Node.ProposeConfChange(ctx, cc)
+	// }
+	return nil
+}
+
+func (r *Raft) rmNode(peerID uint64) error {
+	r.Transport.Peers.RMPeer(peerID)
+
+	if r.Node == nil {
+		return nil
+	}
+
+	cc := raftpb.ConfChange{
+		Type:   raftpb.ConfChangeRemoveNode,
+		NodeID: peerID,
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+	defer cancel()
+	r.Node.ApplyConfChange(cc)
+	err := r.Node.ProposeConfChange(ctx, cc)
+	if err != nil {
+		return err
+	}
+
+	if peerID == r.ID.Uint64() {
+		r.stopNode()
 	}
 	return nil
+}
+
+func (r *Raft) stopNode() {
+	r.Node.Stop()
+	r.Node = nil
+	r.Ticker.Stop()
+	r.Logger = nil
+	r.done <- struct{}{}
+	close(r.done)
+	r.done = nil
 }

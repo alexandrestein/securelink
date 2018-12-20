@@ -45,7 +45,7 @@ func startNServer(t *testing.T, nb int) ([]*securelink.Server, []*rafthandler.Ha
 
 	time.Sleep(time.Second * 2)
 
-	err := handlers[0].Raft.Start()
+	err := handlers[0].Raft.Start(true)
 	if err != nil {
 		closeServers(servers)
 		t.Fatal(err)
@@ -83,7 +83,7 @@ func buildHandler(t *testing.T, ca *securelink.Certificate, nb int) (*securelink
 
 func startRaft(t *testing.T, handler *rafthandler.Handler, peers []*rafthandler.Peer) {
 	handler.Transport.Peers.AddPeers(peers...)
-	err := handler.Raft.Start()
+	err := handler.Raft.Start(true)
 	if err != nil {
 		t.Fatal(err)
 	}

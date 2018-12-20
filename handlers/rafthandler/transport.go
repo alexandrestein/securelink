@@ -141,6 +141,23 @@ func (t *Transport) PostJSONToAll(url string, content []byte, timeout time.Durat
 	return t.manageErrorForMultipleRequests(errChan)
 }
 
+func (t *Transport) Head(destID uint64, url string, timeout time.Duration) error {
+	cli, peer, err := t.Dial(destID, timeout)
+	if err != nil {
+		return err
+	}
+
+	var resp *http.Response
+	resp, err = cli.Head(peer.BuildURL(url))
+	if err != nil {
+		return err
+	} else if resp.StatusCode < 200 || 300 <= resp.StatusCode {
+		return ErrBadResponseCode(resp.StatusCode)
+	}
+
+	return nil
+}
+
 // HeadToAll try to contact every peers to send them a HEAD request
 func (t *Transport) HeadToAll(url string, timeout time.Duration) error {
 	errChan := make(chan error, t.Peers.Len())
@@ -153,19 +170,22 @@ func (t *Transport) HeadToAll(url string, timeout time.Duration) error {
 		wg.Add(1)
 		go func(peer *Peer) {
 			defer wg.Done()
-			cli, _, err := t.Dial(peer.ID, timeout)
+			err := t.Head(peer.ID, url, timeout)
 			if err != nil {
 				errChan <- err
 			}
+			// cli, _, err := t.Dial(peer.ID, timeout)
+			// if err != nil {
+			// 	errChan <- err
+			// }
 
-			var resp *http.Response
-			resp, err = cli.Head(peer.BuildURL(url))
-			if err != nil {
-				errChan <- err
-			} else if resp.StatusCode < 200 || 300 <= resp.StatusCode {
-				errChan <- ErrBadResponseCode(resp.StatusCode)
-			}
-
+			// var resp *http.Response
+			// resp, err = cli.Head(peer.BuildURL(url))
+			// if err != nil {
+			// 	errChan <- err
+			// } else if resp.StatusCode < 200 || 300 <= resp.StatusCode {
+			// 	errChan <- ErrBadResponseCode(resp.StatusCode)
+			// }
 		}(peer)
 	}
 

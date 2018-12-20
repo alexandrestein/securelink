@@ -60,6 +60,22 @@ func (p *Peers) AddPeers(peers ...*Peer) {
 	}
 }
 
+// RMPeer removes the peers with the same ID
+func (p *Peers) RMPeer(peerID uint64) {
+	for i, savedPeer := range p.peers {
+		if peerID == savedPeer.ID {
+			p.lock.Lock()
+
+			// Remove the peer from the slice
+			copy(p.peers[i:], p.peers[i+1:])
+			p.peers[len(p.peers)-1] = nil
+			p.peers = p.peers[:len(p.peers)-1]
+
+			p.lock.Unlock()
+		}
+	}
+}
+
 // GetPeers returns a slice of all registered Peer pointers
 func (p *Peers) GetPeers() []*Peer {
 	return p.peers

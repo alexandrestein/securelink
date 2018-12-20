@@ -36,7 +36,57 @@ func (h *httpHandler) AddNode(c echo.Context) error {
 }
 
 func (h *httpHandler) Start(c echo.Context) error {
-	return h.Handler.Raft.Start()
+	return h.Handler.Raft.Start(false)
+}
+
+func (h *httpHandler) Join(c echo.Context) error {
+	joinObj := &struct {
+		HS      []byte
+		Entries [][]byte
+		Applied uint64
+	}{}
+
+	err := c.Bind(joinObj)
+	if err != nil {
+		return err
+	}
+
+	hs := raftpb.HardState{}
+	// buff := make([]byte, 4096)
+	// defer c.Request().Body.Close()
+	// var n int
+	// n, err = c.Request().Body.Read(buff)
+	// if err != nil {
+	// 	return err
+	// }
+	// buff = buff[:n]
+
+	err = hs.Unmarshal(joinObj.HS)
+	if err != nil {
+		return err
+	}
+
+	err = h.Handler.Raft.Storage.SetHardState(hs)
+	if err != nil {
+		return err
+	}
+
+	h.Handler.Raft.applied = joinObj.Applied
+
+	entries := make([]raftpb.Entry, len(joinObj.Entries))
+	for i, entryAsBytes := range joinObj.Entries {
+		err = entries[i].Unmarshal(entryAsBytes)
+		if err != nil {
+			return err
+		}
+	}
+
+	err = h.Handler.Raft.Storage.Append(entries)
+	if err != nil {
+		return err
+	}
+
+	return h.Handler.Raft.Start(true)
 }
 
 func (h *httpHandler) Message(c echo.Context) error {

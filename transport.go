@@ -93,6 +93,14 @@ func newTransportConn(conn net.Conn, server bool) (*TransportConn, error) {
 	return tc, nil
 }
 
+// GetDefaultGetIDFunc is a easy way to use the default get hostname
+// function
+func GetDefaultGetIDFunc(cert *Certificate) FuncGetHostNameFromAddr {
+	return func(addr string) (serverID string) {
+		return GetID(addr, cert)
+	}
+}
+
 // GetID provides a way to get an ID which in the package can be found
 // as the first host name from the certificate.
 // This function contact the server at the given address with an "insecure" connection

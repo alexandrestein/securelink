@@ -63,13 +63,17 @@ func buildHandler(t *testing.T, ca *securelink.Certificate, nb int) (*securelink
 	port := basePort + uint16(nb)
 
 	tlsConfig := securelink.GetBaseTLSConfig(cert.ID().String(), cert)
-	fmt.Println("0", tlsConfig.NextProtos)
 	s, err := securelink.NewServer(port, tlsConfig, cert, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	raftHandler, err := rafthandler.New(s.Addr(), rafthandler.HostPrefix, s, rafthandler.NewLogger(cert.ID().String(), log.DEBUG))
+	logLevel := log.WARN
+	if testing.Verbose() {
+		logLevel = log.DEBUG
+	}
+
+	raftHandler, err := rafthandler.New(rafthandler.HostPrefix, s, rafthandler.NewLogger(cert.ID().String(), logLevel))
 	if err != nil {
 		t.Fatal(err)
 	}

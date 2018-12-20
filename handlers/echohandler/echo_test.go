@@ -20,6 +20,14 @@ func TestMain(t *testing.T) {
 	conf.CertTemplate = securelink.GetCertTemplate(nil, nil)
 	cert, _ := ca.NewCert(conf, "1")
 
+	tlsConfig := securelink.GetBaseTLSConfig("1", cert)
+	tlsConfig.ClientAuth = tls.RequireAndVerifyClientCert
+	s, err := securelink.NewServer(1364, tlsConfig, cert, securelink.GetDefaultGetIDFunc(cert))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+
 	addr := new(addr)
 	echoService, err := echohandler.New(addr, "echo", securelink.GetBaseTLSConfig("1", cert))
 	if err != nil {
@@ -32,18 +40,6 @@ func TestMain(t *testing.T) {
 	})
 
 	go echoService.Start()
-
-	getNameFn := func(s string) string {
-		return securelink.GetID(s, cert)
-	}
-
-	tlsConfig := securelink.GetBaseTLSConfig("1", cert)
-	tlsConfig.ClientAuth = tls.RequireAndVerifyClientCert
-	s, err := securelink.NewServer(1364, tlsConfig, cert, getNameFn)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer s.Close()
 
 	s.RegisterService(echoService)
 

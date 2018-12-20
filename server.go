@@ -57,13 +57,11 @@ func NewServer(port uint16, tlsConfig *tls.Config, cert *Certificate, getHostNam
 	// tlsConfig.NextProtos = append(tlsConfig.NextProtos, "http/1.1", "h2")
 	// tlsConfig.NextProtos = append(tlsConfig.NextProtos, "http/1.1")
 
-	fmt.Println("tlsConfig 1", tlsConfig.NextProtos)
 	var tlsListener net.Listener
 	tlsListener, err = tls.Listen("tcp", addr.ForListenerBroadcast(), tlsConfig)
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println("tlsConfig 2", tlsConfig.NextProtos)
 
 	if getHostNameFromAddr == nil {
 		getHostNameFromAddr = func(s string) string {

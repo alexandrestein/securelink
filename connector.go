@@ -27,13 +27,8 @@ func NewHTTPSConnector(host string, cert *Certificate) *http.Client {
 		TLSClientConfig: GetBaseTLSConfig(host, cert),
 	}
 
-	// tlsConfig := GetBaseTLSConfig(host, cert)
-
-	// tr := &http2.Transport{
-	// 	TLSClientConfig: tlsConfig,
-	// }
-
 	http2.ConfigureTransport(tr)
+
 	return &http.Client{
 		Transport: tr,
 	}
@@ -64,13 +59,7 @@ func GetBaseTLSConfig(host string, cert *Certificate) *tls.Config {
 			tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,
 			tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305,
 		},
-		// NextProtos: nil,
-		// NextProtos: []string{"http/1.1"},
 	}
-
-	// if server {
-	// 	conf.NextProtos = append(conf.NextProtos, "http/1.1", "h2")
-	// }
 
 	return conf
 }

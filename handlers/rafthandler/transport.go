@@ -19,6 +19,7 @@ var (
 	DefaultRequestTimeOut = time.Second * 5
 )
 
+// Dial start a new HTTP client to communicate with other nodes
 func (t *Transport) Dial(destID uint64, timeout time.Duration) (*http.Client, *Peer, error) {
 	if timeout == 0 {
 		timeout = DefaultRequestTimeOut
@@ -69,6 +70,8 @@ func (t *Transport) Dial(destID uint64, timeout time.Duration) (*http.Client, *P
 	return nil, nil, fmt.Errorf("ID not found")
 }
 
+// Get is a simplifier which use Dial function to return the GET response for the given
+// peer ID and the given URL
 func (t *Transport) Get(destID uint64, url string, timeout time.Duration) (*http.Response, error) {
 	cli, peer, err := t.Dial(destID, timeout)
 	if err != nil {
@@ -83,6 +86,8 @@ func (t *Transport) Get(destID uint64, url string, timeout time.Duration) (*http
 	return resp, nil
 }
 
+// GetBytes does same as above but instead of returning a http.Response pointer it returns directly
+// the content of the body
 func (t *Transport) GetBytes(destID uint64, url string, timeout time.Duration) ([]byte, error) {
 	resp, err := t.Get(destID, url, timeout)
 	if err != nil {
@@ -93,6 +98,8 @@ func (t *Transport) GetBytes(destID uint64, url string, timeout time.Duration) (
 	return ioutil.ReadAll(resp.Body)
 }
 
+// PostJSON is a simplifier which use Dial function to send the given content for the given
+// peer ID and the given URL and return the POST response
 func (t *Transport) PostJSON(destID uint64, url string, content []byte, timeout time.Duration) (*http.Response, error) {
 	cli, peer, err := t.Dial(destID, timeout)
 	if err != nil {
@@ -110,41 +117,7 @@ func (t *Transport) PostJSON(destID uint64, url string, content []byte, timeout 
 	return resp, err
 }
 
-func (t *Transport) HeadToAll(url string, timeout time.Duration) error {
-	errChan := make(chan error, t.Peers.Len())
-	var wg sync.WaitGroup
-	for _, peer := range t.Peers.peers {
-		if peer.ID == t.ID().Uint64() {
-			continue
-		}
-
-		wg.Add(1)
-		go func(peer *Peer) {
-			defer wg.Done()
-			cli, _, err := t.Dial(peer.ID, timeout)
-			if err != nil {
-				errChan <- err
-				// globalErr = multierror.Append(globalErr, err)
-			}
-
-			var resp *http.Response
-			resp, err = cli.Head(peer.BuildURL(url))
-			if err != nil {
-				errChan <- err
-				// globalErr = multierror.Append(globalErr, err)
-			} else if resp.StatusCode < 200 || 300 <= resp.StatusCode {
-				errChan <- ErrBadResponseCode(resp.StatusCode)
-				// globalErr = multierror.Append(globalErr, ErrBadResponseCode(resp.StatusCode))
-			}
-
-		}(peer)
-	}
-
-	wg.Wait()
-
-	return t.manageErrorForMultipleRequests(errChan)
-}
-
+// PostJSONToAll does same as above but for all registered peers
 func (t *Transport) PostJSONToAll(url string, content []byte, timeout time.Duration) error {
 	errChan := make(chan error, t.Peers.Len())
 	var wg sync.WaitGroup
@@ -168,6 +141,39 @@ func (t *Transport) PostJSONToAll(url string, content []byte, timeout time.Durat
 	return t.manageErrorForMultipleRequests(errChan)
 }
 
+// HeadToAll try to contact every peers to send them a HEAD request
+func (t *Transport) HeadToAll(url string, timeout time.Duration) error {
+	errChan := make(chan error, t.Peers.Len())
+	var wg sync.WaitGroup
+	for _, peer := range t.Peers.peers {
+		if peer.ID == t.ID().Uint64() {
+			continue
+		}
+
+		wg.Add(1)
+		go func(peer *Peer) {
+			defer wg.Done()
+			cli, _, err := t.Dial(peer.ID, timeout)
+			if err != nil {
+				errChan <- err
+			}
+
+			var resp *http.Response
+			resp, err = cli.Head(peer.BuildURL(url))
+			if err != nil {
+				errChan <- err
+			} else if resp.StatusCode < 200 || 300 <= resp.StatusCode {
+				errChan <- ErrBadResponseCode(resp.StatusCode)
+			}
+
+		}(peer)
+	}
+
+	wg.Wait()
+
+	return t.manageErrorForMultipleRequests(errChan)
+}
+
 func (t *Transport) manageErrorForMultipleRequests(errChan chan error) error {
 	var globalErr *multierror.Error
 notDone:
@@ -181,6 +187,7 @@ notDone:
 	return globalErr.ErrorOrNil()
 }
 
+// SendMessageTo sends the given message content to given node
 func (t *Transport) SendMessageTo(destID uint64, message []byte, timeout time.Duration) error {
 	resp, err := t.PostJSON(destID, Message, message, timeout)
 	if err != nil {

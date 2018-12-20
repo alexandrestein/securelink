@@ -1,14 +1,17 @@
 package echohandler
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
 	"net"
 	"net/http"
 	"regexp"
+	"time"
 
 	"github.com/alexandrestein/securelink"
 	"github.com/labstack/echo"
+	"golang.org/x/net/http2"
 )
 
 type (
@@ -16,9 +19,15 @@ type (
 	// for Echo http framework
 	Handler struct {
 		*securelink.BaseHandler
-		Echo       *echo.Echo
-		httpServer *http.Server
-		matchReg   *regexp.Regexp
+		Echo     *echo.Echo
+		matchReg *regexp.Regexp
+		http     *httpStruct
+	}
+
+	httpStruct struct {
+		server          *http.Server
+		h2Server        *http2.Server
+		h2ServeConnOpts *http2.ServeConnOpts
 	}
 )
 
@@ -32,42 +41,46 @@ func New(addr net.Addr, name string, tlsConfig *tls.Config) (*Handler, error) {
 		return nil, err
 	}
 
-	li := securelink.NewBaseListener(addr)
-
 	e := echo.New()
 	e.HideBanner = true
 	e.HidePort = true
-	e.TLSListener = li
-
-	// tlsConfig.NextProtos = append(tlsConfig.NextProtos, "h2", "http/1.1")
 
 	httpServer := new(http.Server)
 	httpServer.TLSConfig = tlsConfig
 	httpServer.Addr = addr.String()
 	httpServer.Handler = e
 
+	http2.ConfigureServer(httpServer, nil)
+
 	e.TLSServer = httpServer
+
+	h2 := new(http2.Server)
 
 	return &Handler{
 		BaseHandler: &securelink.BaseHandler{
 			NameField: name,
-			Listener:  li,
 		},
-		Echo:       e,
-		httpServer: httpServer,
-		matchReg:   rg,
+		Echo: e,
+		http: &httpStruct{
+			server:   httpServer,
+			h2Server: h2,
+			h2ServeConnOpts: &http2.ServeConnOpts{
+				BaseConfig: httpServer,
+				Handler:    e,
+			},
+		},
+		matchReg: rg,
 	}, nil
 }
 
 // Start needs to be called after all routes are registered
 func (h *Handler) Start() error {
-	return h.Echo.StartServer(h.httpServer)
-	// return h.httpServer.Serve(h.Echo.TLSListener)
+	return h.Echo.StartServer(h.http.server)
 }
 
 // Handle provides the securelink.Handler interface
 func (h *Handler) Handle(conn net.Conn) error {
-	h.Listener.AcceptChan <- conn
+	h.http.h2Server.ServeConn(conn, h.http.h2ServeConnOpts)
 	return nil
 }
 
@@ -76,6 +89,14 @@ func (h *Handler) Match(serverName string) bool {
 	return h.matchReg.MatchString(serverName)
 }
 
+// Close closes Echo and other related servers
 func (h *Handler) Close() error {
-	return h.Echo.Close()
+	h.Listener.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+	defer cancel()
+	err := h.Echo.Shutdown(ctx)
+	if err != nil {
+		return h.Echo.Close()
+	}
+	return nil
 }

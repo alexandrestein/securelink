@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"math"
 	"math/big"
-	"net"
 	"regexp"
 	"time"
 
@@ -22,8 +21,6 @@ const (
 	// If the node id is XXX the host name provided during handshake will be
 	// <HostPrefix>.XXX.
 	HostPrefix = "raft"
-	// // HostHTTPPrefix is same as above but for HTTP splitter
-	// HostHTTPPrefix = "http-raft"
 )
 
 // Defines the paths for the HTTP API
@@ -42,6 +39,8 @@ var (
 )
 
 type (
+	// Handler defines the main element of the package.
+	// This holds every components for managing the raft cluster
 	Handler struct {
 		*echohandler.Handler
 
@@ -53,6 +52,7 @@ type (
 		Logger *Logger
 	}
 
+	// Raft holds the raft components
 	Raft struct {
 		ID     *big.Int
 		Node   raft.Node
@@ -68,6 +68,7 @@ type (
 		Messages chan []byte
 	}
 
+	// Transport is an sub element of the Handler ans Raft pointer
 	Transport struct {
 		*securelink.Server
 
@@ -76,9 +77,13 @@ type (
 	}
 )
 
-func New(addr net.Addr, name string, server *securelink.Server, logger *Logger) (*Handler, error) {
+// New builds a new raft handler on the given server.
+//
+// This function self register the handler on the server with the given name.
+// Logger can be empty. A logger with WARN level is used instead.
+func New(name string, server *securelink.Server, logger *Logger) (*Handler, error) {
 	ret := new(Handler)
-	echoHandler, err := echohandler.New(addr, HostPrefix, server.TLS.Config)
+	echoHandler, err := echohandler.New(server.AddrStruct, HostPrefix, server.TLS.Config)
 	if err != nil {
 		return nil, err
 	}
@@ -91,6 +96,9 @@ func New(addr net.Addr, name string, server *securelink.Server, logger *Logger) 
 	ret.Transport.Peers = NewPeers()
 	ret.Transport.Peers.AddPeers(MakePeerFromServer(server))
 
+	if logger == nil {
+		logger = NewLogger(server.ID().String(), log.WARN)
+	}
 	ret.Logger = logger
 
 	ret.Server = server
@@ -114,6 +122,9 @@ func New(addr net.Addr, name string, server *securelink.Server, logger *Logger) 
 	return ret, nil
 }
 
+// Start starts the raft cluster.
+// To work this must be call on a raft pointer which has at least 3 peers.
+// Peers can be added from other node but the unstarted cluster must have at least 3 nodes.
 func (r *Raft) Start() (err error) {
 	// If started no need to start the node again.
 	// This will be called multiple times at the startup. Every nodes which get
@@ -158,6 +169,8 @@ func (r *Raft) Start() (err error) {
 	return nil
 }
 
+// AddPeer adds a peer to the cluster. This save the given peer and push
+// it to every known peer.
 func (r *Raft) AddPeer(peer *Peer) error {
 	if peer.ID == r.ID.Uint64() {
 		return nil
@@ -174,6 +187,7 @@ func (r *Raft) AddPeer(peer *Peer) error {
 	return err
 }
 
+// LocalPeer returns a Peer pointer of the local raft node
 func (r *Raft) LocalPeer() *Peer {
 	return MakePeer(r.Transport.ID().Uint64(), r.Transport.AddrStruct)
 }
@@ -235,40 +249,12 @@ func (r *Raft) processSnapshot(snapshot raftpb.Snapshot) {
 }
 
 func (r *Raft) process(entry raftpb.Entry) {
-	// fmt.Println("process", raft.DescribeEntry(entry, nil))
 	if entry.Type == raftpb.EntryNormal && entry.Data != nil {
 		r.Messages <- entry.Data
-
-		// parts := bytes.SplitN(entry.Data, []byte(":"), 2)
-		// r.pstore[string(parts[0])] = string(parts[1])
 	}
 }
 
-// func (r *Raft) HandleMessage(conn net.Conn) {
-// 	buf := make([]byte, 4096)
-// 	n, err := conn.Read(buf)
-// 	if err != nil {
-// 		fmt.Println("r *Raft) HandleMessage", 0, err)
-// 		return
-// 	}
-
-// 	buf = buf[:n]
-// 	msg := raftpb.Message{}
-// 	err = msg.Unmarshal(buf)
-// 	if err != nil {
-// 		fmt.Println("r *Raft) HandleMessage", 1, err)
-// 		return
-// 	}
-
-// 	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*750)
-// 	defer cancel()
-// 	err = r.Node.Step(ctx, msg)
-// 	if err != nil {
-// 		fmt.Println("r *Raft) HandleMessage", 2, err)
-// 		return
-// 	}
-// }
-
+// StopRaft stops all raft elements
 func (r *Raft) StopRaft() {
 	r.Node.Stop()
 	r.Ticker.Stop()
@@ -276,6 +262,7 @@ func (r *Raft) StopRaft() {
 	r.Node = nil
 }
 
+// Close stops raft components and deregister the service
 func (h *Handler) Close() {
 	h.Raft.StopRaft()
 	close(h.Raft.Messages)

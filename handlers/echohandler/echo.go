@@ -50,8 +50,6 @@ func New(addr net.Addr, name string, tlsConfig *tls.Config) (*Handler, error) {
 	httpServer.Addr = addr.String()
 	httpServer.Handler = e
 
-	http2.ConfigureServer(httpServer, nil)
-
 	e.TLSServer = httpServer
 
 	h2 := new(http2.Server)

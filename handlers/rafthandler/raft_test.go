@@ -43,7 +43,7 @@ func startNServer(t *testing.T, nb int) ([]*securelink.Server, []*rafthandler.Ha
 		}
 	}
 
-	time.Sleep(time.Second)
+	time.Sleep(time.Second * 2)
 
 	err := handlers[0].Raft.Start()
 	if err != nil {

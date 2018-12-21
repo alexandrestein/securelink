@@ -14,6 +14,7 @@ import (
 type (
 	// Peers defines a slice of Peer. It can be use safely from multiple goroutines
 	Peers struct {
+		// local *Peer
 		peers []*Peer
 		lock  sync.Locker
 	}
@@ -30,6 +31,7 @@ type (
 // NewPeers builds a Peers pointer filled-up with the given Peer pointers
 func NewPeers(peers ...*Peer) *Peers {
 	p := new(Peers)
+	// p.local = local
 	p.peers = []*Peer{}
 	p.lock = new(sync.Mutex)
 	p.AddPeers(peers...)
@@ -62,19 +64,29 @@ func (p *Peers) AddPeers(peers ...*Peer) {
 
 // RMPeer removes the peers with the same ID
 func (p *Peers) RMPeer(peerID uint64) {
+	p.lock.Lock()
+
+	toRemove := []int{}
 	for i, savedPeer := range p.peers {
 		if peerID == savedPeer.ID {
-			p.lock.Lock()
-
-			// Remove the peer from the slice
-			copy(p.peers[i:], p.peers[i+1:])
-			p.peers[len(p.peers)-1] = nil
-			p.peers = p.peers[:len(p.peers)-1]
-
-			p.lock.Unlock()
+			toRemove = append(toRemove, i)
 		}
 	}
+
+	for _, i := range toRemove {
+		// Remove the peer from the slice
+		copy(p.peers[i:], p.peers[i+1:])
+		p.peers[len(p.peers)-1] = nil
+		p.peers = p.peers[:len(p.peers)-1]
+	}
+
+	p.lock.Unlock()
 }
+
+// // GetLocalPeer returns the Peer pointer given at the initialization
+// func (p *Peers) GetLocalPeer() *Peer {
+// 	return p.local
+// }
 
 // GetPeers returns a slice of all registered Peer pointers
 func (p *Peers) GetPeers() []*Peer {

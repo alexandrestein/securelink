@@ -59,6 +59,10 @@ func (h *httpHandler) Message(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, err)
 	}
 
+	if h.Raft.Node == nil {
+		return nil
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*750)
 	defer cancel()
 	err = h.Raft.Node.Step(ctx, msg)
@@ -68,3 +72,9 @@ func (h *httpHandler) Message(c echo.Context) error {
 
 	return nil
 }
+
+// func (h *httpHandler)  RMNode(c echo.Context) error {
+// 	h.
+
+// 	return nil
+// }

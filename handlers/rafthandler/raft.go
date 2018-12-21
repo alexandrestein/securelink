@@ -26,8 +26,8 @@ const (
 // Defines the paths for the HTTP API
 const (
 	// GetServerInfo = "/"
-	AddNode     = "/addNode"
-	RMNode      = "/rmNode"
+	AddNode = "/addNode"
+	// RMNode      = "/rmNode"
 	StartNodes  = "/start"
 	JoinCluster = "/join"
 	StopNodes   = "/stop"
@@ -300,13 +300,23 @@ func (r *Raft) RemovePeer(peerID uint64) error {
 		return ErrRaftNodeNotLoaded
 	}
 
-	err := r.Transport.PostJSONToAll(RMNode, []byte(fmt.Sprintf("%d", peerID)), DefaultRequestTimeOut)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*2)
+	defer cancel()
+	err := r.Node.ProposeConfChange(ctx, raftpb.ConfChange{
+		Type:   raftpb.ConfChangeRemoveNode,
+		NodeID: peerID,
+	})
 	if err != nil {
 		return err
 	}
 
-	r.Transport.Peers.RMPeer(peerID)
-	r.rmNode(peerID)
+	// err = r.Transport.PostJSONToAll(RMNode, []byte(fmt.Sprintf("%d", peerID)), DefaultRequestTimeOut)
+	// if err != nil {
+	// 	return err
+	// }
+
+	// r.Transport.Peers.RMPeer(peerID)
+	// r.rmNode(peerID)
 
 	return nil
 }
@@ -333,6 +343,9 @@ func (r *Raft) raftLoop() {
 					var cc raftpb.ConfChange
 					cc.Unmarshal(entry.Data)
 					r.confState = r.Node.ApplyConfChange(cc)
+					if cc.Type == raftpb.ConfChangeRemoveNode {
+						r.rmNode(cc.NodeID)
+					}
 				}
 			}
 			r.Node.Advance()
@@ -438,22 +451,22 @@ func (r *Raft) addNode(peers ...*Peer) error {
 func (r *Raft) rmNode(peerID uint64) error {
 	r.Transport.Peers.RMPeer(peerID)
 
-	if r.Node == nil {
-		return nil
-	}
+	// if r.Node == nil {
+	// 	return nil
+	// }
 
-	cc := raftpb.ConfChange{
-		Type:   raftpb.ConfChangeRemoveNode,
-		NodeID: peerID,
-	}
+	// cc := raftpb.ConfChange{
+	// 	Type:   raftpb.ConfChangeRemoveNode,
+	// 	NodeID: peerID,
+	// }
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
-	defer cancel()
-	r.Node.ApplyConfChange(cc)
-	err := r.Node.ProposeConfChange(ctx, cc)
-	if err != nil {
-		return err
-	}
+	// ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+	// defer cancel()
+	// r.Node.ApplyConfChange(cc)
+	// err := r.Node.ProposeConfChange(ctx, cc)
+	// if err != nil {
+	// 	return err
+	// }
 
 	if peerID == r.ID.Uint64() {
 		r.stopNode()

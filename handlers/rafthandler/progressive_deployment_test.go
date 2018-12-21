@@ -144,13 +144,13 @@ func testAdd5Nodes(t *testing.T, ca *securelink.Certificate, livingNode *rafthan
 }
 
 func testRemove3Nodes(t *testing.T, servers []*securelink.Server, handlers []*rafthandler.Handler) {
-	toRemove := make([]uint64, 3)
-	usedInt := uint64(rand.Int31n(int32(len(servers))))
-	usedS := servers[usedInt]
+	toRemove := make([]int, 3)
+	usedInt := int(rand.Int31n(int32(len(servers))))
+	// usedS := servers[usedInt]
 	usedH := handlers[usedInt]
 	for i := range toRemove {
 	tryAgain:
-		toRm := uint64(rand.Int31n(int32(len(servers))))
+		toRm := int(rand.Int31n(int32(len(servers))))
 		for _, existingToRm := range toRemove {
 			if toRm == existingToRm || toRm == usedInt {
 				goto tryAgain
@@ -160,4 +160,20 @@ func testRemove3Nodes(t *testing.T, servers []*securelink.Server, handlers []*ra
 		toRemove[i] = toRm
 	}
 
+	for _, i := range toRemove {
+		err := usedH.Raft.RemovePeer(handlers[i].Transport.ID().Uint64())
+		if err != nil {
+			t.Fatal(err)
+		}
+		time.Sleep(time.Second * 2)
+	}
+
+	if nbNodes := len(usedH.Raft.GetConfState().Nodes); nbNodes != 5 {
+		closeServers(servers)
+		t.Fatalf("expected 8 nodes but had %d\n%v", nbNodes, usedH.Raft.GetConfState().Nodes)
+	}
+
+	if testing.Verbose() {
+		t.Logf("config looks consistant with %d node with configuration state %v", len(usedH.Raft.GetConfState().Nodes), usedH.Raft.GetConfState())
+	}
 }

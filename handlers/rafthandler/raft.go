@@ -70,6 +70,8 @@ type (
 		Logger *Logger
 
 		Messages chan []byte
+
+		confState *raftpb.ConfState
 	}
 
 	// Transport is an sub element of the Handler ans Raft pointer
@@ -231,58 +233,58 @@ func (r *Raft) join(peerID uint64) error {
 		return err
 	}
 
-	var entries []raftpb.Entry
-	var first, last uint64
-	first, err = r.Storage.FirstIndex()
-	if err != nil {
-		return err
-	}
-	last, err = r.Storage.LastIndex()
-	if err != nil {
-		return err
-	}
-	entries, err = r.Storage.Entries(first, last, math.MaxUint64)
-	if err != nil {
-		return err
-	}
-	fmt.Println("entries", entries, first, last)
+	// var entries []raftpb.Entry
+	// var first, last uint64
+	// first, err = r.Storage.FirstIndex()
+	// if err != nil {
+	// 	return err
+	// }
+	// last, err = r.Storage.LastIndex()
+	// if err != nil {
+	// 	return err
+	// }
+	// entries, err = r.Storage.Entries(first, last, math.MaxUint64)
+	// if err != nil {
+	// 	return err
+	// }
+	// fmt.Println("entries", entries, first, last)
 
-	hs, _, err := r.Storage.InitialState()
-	if err != nil {
-		return err
-	}
+	// hs, _, err := r.Storage.InitialState()
+	// if err != nil {
+	// 	return err
+	// }
 
-	var hsAsBytes []byte
-	hsAsBytes, err = hs.Marshal()
-	if err != nil {
-		return err
-	}
+	// var hsAsBytes []byte
+	// hsAsBytes, err = hs.Marshal()
+	// if err != nil {
+	// 	return err
+	// }
 
-	joinObj := &struct {
-		HS      []byte
-		Entries [][]byte
-		Applied uint64
-	}{
-		HS:      hsAsBytes,
-		Entries: make([][]byte, len(entries)),
-		Applied: r.Node.Status().Applied,
-	}
+	// joinObj := &struct {
+	// 	HS      []byte
+	// 	Entries [][]byte
+	// 	Applied uint64
+	// }{
+	// 	HS:      hsAsBytes,
+	// 	Entries: make([][]byte, len(entries)),
+	// 	Applied: r.Node.Status().Applied,
+	// }
 
-	for _, entry := range entries {
-		entryAsBytes, err := entry.Marshal()
-		if err != nil {
-			return err
-		}
-		joinObj.Entries = append(joinObj.Entries, entryAsBytes)
-	}
+	// for _, entry := range entries {
+	// 	entryAsBytes, err := entry.Marshal()
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	// 	joinObj.Entries = append(joinObj.Entries, entryAsBytes)
+	// }
 
-	var joinObjAsBytes []byte
-	joinObjAsBytes, err = json.Marshal(joinObj)
-	if err != nil {
-		return err
-	}
+	// var joinObjAsBytes []byte
+	// joinObjAsBytes, err = json.Marshal(joinObj)
+	// if err != nil {
+	// 	return err
+	// }
 
-	_, err = r.Transport.PostJSON(peerID, JoinCluster, joinObjAsBytes, 0)
+	err = r.Transport.Head(peerID, JoinCluster, 0)
 	if err != nil {
 		return err
 	}
@@ -330,7 +332,7 @@ func (r *Raft) raftLoop() {
 				if entry.Type == raftpb.EntryConfChange {
 					var cc raftpb.ConfChange
 					cc.Unmarshal(entry.Data)
-					r.Node.ApplyConfChange(cc)
+					r.confState = r.Node.ApplyConfChange(cc)
 				}
 			}
 			r.Node.Advance()
@@ -467,4 +469,8 @@ func (r *Raft) stopNode() {
 	r.done <- struct{}{}
 	close(r.done)
 	r.done = nil
+}
+
+func (r *Raft) GetConfState() (ret raftpb.ConfState) {
+	return *r.confState
 }

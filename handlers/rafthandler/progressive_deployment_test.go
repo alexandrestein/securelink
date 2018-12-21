@@ -2,6 +2,7 @@ package rafthandler_test
 
 import (
 	"context"
+	"math/rand"
 	"testing"
 	"time"
 
@@ -21,13 +22,9 @@ func TestProgressiveDeployment(t *testing.T) {
 	})
 	defer closeServers(servers)
 
-	time.Sleep(time.Second * 4)
-
-	t.Run("update leader", func(t *testing.T) {
-		testUpdateLeader(t, handlers)
-	})
-
-	time.Sleep(time.Second * 2)
+	// t.Run("update leader", func(t *testing.T) {
+	// 	testUpdateLeader(t, handlers)
+	// })
 
 	t.Run("update add 5 nodes", func(t *testing.T) {
 		serversBis, handlersBis := testAdd5Nodes(t, ca, handlers[0])
@@ -35,7 +32,9 @@ func TestProgressiveDeployment(t *testing.T) {
 		handlers = append(handlers, handlersBis...)
 	})
 
-	time.Sleep(time.Second * 4)
+	t.Run("update remove 3 nodes", func(t *testing.T) {
+		testRemove3Nodes(t, servers, handlers)
+	})
 }
 
 func testStart3Nodes(t *testing.T, ca *securelink.Certificate) (servers []*securelink.Server, handlers []*rafthandler.Handler) {
@@ -68,6 +67,7 @@ func testStart3Nodes(t *testing.T, ca *securelink.Certificate) (servers []*secur
 	servers = append(servers, server1, server2, server3)
 	handlers = append(handlers, handler1, handler2, handler3)
 
+	time.Sleep(time.Second * 2)
 	return
 }
 
@@ -128,12 +128,36 @@ func testAdd5Nodes(t *testing.T, ca *securelink.Certificate, livingNode *rafthan
 			t.Fatal(err)
 		}
 
-		time.Sleep(time.Second * 2)
+		time.Sleep(time.Second * 1)
 	}
 
-	if nbNodes := len(livingNode.Raft.Node.Status().Progress); nbNodes != 8 {
-		t.Fatalf("expected 8 nodes but had %d", nbNodes)
+	if nbNodes := len(livingNode.Raft.GetConfState().Nodes); nbNodes != 8 {
+		closeServers(servers)
+		t.Fatalf("expected 8 nodes but had %d\n%v", nbNodes, livingNode.Raft.GetConfState().Nodes)
+	}
+
+	if testing.Verbose() {
+		t.Logf("config looks consistant with %d node with configuration state %v", len(livingNode.Raft.GetConfState().Nodes), livingNode.Raft.GetConfState())
 	}
 
 	return
+}
+
+func testRemove3Nodes(t *testing.T, servers []*securelink.Server, handlers []*rafthandler.Handler) {
+	toRemove := make([]uint64, 3)
+	usedInt := uint64(rand.Int31n(int32(len(servers))))
+	usedS := servers[usedInt]
+	usedH := handlers[usedInt]
+	for i := range toRemove {
+	tryAgain:
+		toRm := uint64(rand.Int31n(int32(len(servers))))
+		for _, existingToRm := range toRemove {
+			if toRm == existingToRm || toRm == usedInt {
+				goto tryAgain
+			}
+		}
+
+		toRemove[i] = toRm
+	}
+
 }

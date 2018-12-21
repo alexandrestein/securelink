@@ -22,14 +22,15 @@ func TestProgressiveDeployment(t *testing.T) {
 	})
 	defer closeServers(servers)
 
-	// t.Run("update leader", func(t *testing.T) {
-	// 	testUpdateLeader(t, handlers)
-	// })
+	t.Run("update leader", func(t *testing.T) {
+		testUpdateLeader(t, handlers)
+	})
 
 	t.Run("update add 5 nodes", func(t *testing.T) {
 		serversBis, handlersBis := testAdd5Nodes(t, ca, handlers[0])
 		servers = append(servers, serversBis...)
 		handlers = append(handlers, handlersBis...)
+		defer closeServers(serversBis)
 	})
 
 	t.Run("update remove 3 nodes", func(t *testing.T) {
@@ -128,7 +129,7 @@ func testAdd5Nodes(t *testing.T, ca *securelink.Certificate, livingNode *rafthan
 			t.Fatal(err)
 		}
 
-		time.Sleep(time.Second * 1)
+		time.Sleep(time.Second * 3)
 	}
 
 	if nbNodes := len(livingNode.Raft.GetConfState().Nodes); nbNodes != 8 {
@@ -165,12 +166,12 @@ func testRemove3Nodes(t *testing.T, servers []*securelink.Server, handlers []*ra
 		if err != nil {
 			t.Fatal(err)
 		}
-		time.Sleep(time.Second * 2)
+		time.Sleep(time.Second * 3)
 	}
 
 	if nbNodes := len(usedH.Raft.GetConfState().Nodes); nbNodes != 5 {
 		closeServers(servers)
-		t.Fatalf("expected 8 nodes but had %d\n%v", nbNodes, usedH.Raft.GetConfState().Nodes)
+		t.Fatalf("expected 5 nodes but had %d\n%v", nbNodes, usedH.Raft.GetConfState().Nodes)
 	}
 
 	if testing.Verbose() {

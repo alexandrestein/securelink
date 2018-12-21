@@ -68,9 +68,9 @@ func buildHandler(t *testing.T, ca *securelink.Certificate, nb int) (*securelink
 		t.Fatal(err)
 	}
 
-	logLevel := log.WARN
+	logLevel := log.ERROR
 	if testing.Verbose() {
-		logLevel = log.DEBUG
+		logLevel = log.WARN
 	}
 
 	raftHandler, err := rafthandler.New(rafthandler.HostPrefix, s, rafthandler.NewLogger(cert.ID().String(), logLevel))

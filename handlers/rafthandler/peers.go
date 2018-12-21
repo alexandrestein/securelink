@@ -15,8 +15,9 @@ type (
 	// Peers defines a slice of Peer. It can be use safely from multiple goroutines
 	Peers struct {
 		// local *Peer
+
 		peers []*Peer
-		lock  sync.Locker
+		lock  *sync.RWMutex
 	}
 	// Peer defines the remote peer with communication components
 	Peer struct {
@@ -25,6 +26,8 @@ type (
 
 		cli         *http.Client
 		cliDeadline time.Time
+
+		lock *sync.RWMutex
 	}
 )
 
@@ -33,7 +36,7 @@ func NewPeers(peers ...*Peer) *Peers {
 	p := new(Peers)
 	// p.local = local
 	p.peers = []*Peer{}
-	p.lock = new(sync.Mutex)
+	p.lock = new(sync.RWMutex)
 	p.AddPeers(peers...)
 
 	return p
@@ -49,6 +52,7 @@ func (p *Peers) AddPeers(peers ...*Peer) {
 				goto pass
 			}
 		}
+		givenPeer.lock = new(sync.RWMutex)
 		peersToSave = append(peersToSave, givenPeer)
 	pass:
 	}
@@ -95,6 +99,8 @@ func (p *Peers) GetPeers() []*Peer {
 
 // Len returns how many peers are registered
 func (p *Peers) Len() int {
+	p.lock.RLock()
+	defer p.lock.RUnlock()
 	return len(p.peers)
 }
 
@@ -123,6 +129,7 @@ func MakePeer(id uint64, addr *common.Addr) *Peer {
 			ID: id,
 		},
 		Addr: addr,
+		lock: new(sync.RWMutex),
 	}
 }
 

@@ -25,6 +25,8 @@ func (t *Transport) Dial(destID uint64, timeout time.Duration) (*http.Client, *P
 		timeout = DefaultRequestTimeOut
 	}
 
+	t.Peers.lock.RLock()
+	defer t.Peers.lock.RUnlock()
 	for _, peer := range t.Peers.peers {
 		if peer.ID == destID {
 			// To know if the peer has been updated
@@ -38,7 +40,7 @@ func (t *Transport) Dial(destID uint64, timeout time.Duration) (*http.Client, *P
 
 				// Lock the peers for any concurrent corruption
 				updated = true
-				t.Peers.lock.Lock()
+				peer.lock.Lock()
 				peer.cli = cli
 				peer.cliDeadline = time.Now().Add(timeout)
 			} else {
@@ -54,13 +56,13 @@ func (t *Transport) Dial(destID uint64, timeout time.Duration) (*http.Client, *P
 				// Every peers are lock during this process.
 				if time.Now().After(peer.cliDeadline.Add(-timeout / 2)) {
 					updated = true
-					t.Peers.lock.Lock()
+					peer.lock.Lock()
 					peer.cliDeadline = time.Now().Add(timeout)
 				}
 			}
 
 			if updated {
-				t.Peers.lock.Unlock()
+				peer.lock.Unlock()
 			}
 
 			return cli, peer, nil

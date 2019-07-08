@@ -54,15 +54,17 @@ type (
 	}
 )
 
-func buildCertPEM(input []byte) []byte {
+func BuildCertPEM(cert *x509.Certificate) []byte {
 	return pem.EncodeToMemory(&pem.Block{
 		Type:  "CERTIFICATE",
-		Bytes: input,
+		Bytes: cert.Raw,
 	})
 }
 
 func genKeyPair(keyType KeyType, keyLength KeyLength) (*KeyPair, error) {
-	if keyType == KeyTypeRSA {
+	if keyType == KeyTypeEd25519 {
+		return NewEd25519(), nil
+	} else if keyType == KeyTypeRSA {
 		switch keyLength {
 		case KeyLengthRsa2048, KeyLengthRsa3072, KeyLengthRsa4096, KeyLengthRsa8192:
 			return NewRSA(keyLength), nil
@@ -79,7 +81,9 @@ func genKeyPair(keyType KeyType, keyLength KeyLength) (*KeyPair, error) {
 
 // GetSignatureAlgorithm returns the signature algorithm for the given key type and key size
 func GetSignatureAlgorithm(keyType KeyType, keyLength KeyLength) x509.SignatureAlgorithm {
-	if keyType == KeyTypeRSA {
+	if keyType == KeyTypeEd25519 {
+		return x509.PureEd25519
+	} else if keyType == KeyTypeRSA {
 		switch keyLength {
 		case KeyLengthRsa2048:
 			return x509.SHA256WithRSAPSS
@@ -178,7 +182,7 @@ func newCert(config *NewCertConfig, names ...string) (*Certificate, error) {
 
 // GetCertPEM is useful to start a new client or server with tls.X509KeyPair
 func (c *Certificate) GetCertPEM() []byte {
-	return buildCertPEM(c.Cert.Raw)
+	return BuildCertPEM(c.Cert)
 }
 
 // GetTLSCertificate is useful in
@@ -302,7 +306,7 @@ func (ncc *NewCertConfig) Valid() (err error) {
 	}
 
 	if ncc.PublicKey == nil {
-		err = ncc.genPublicKey()
+		ncc.PublicKey, err = NewKeyPair(ncc.KeyType, ncc.KeyLength)
 		if err != nil {
 			return err
 		}
@@ -333,10 +337,10 @@ func (ncc *NewCertConfig) genParent() error {
 	return nil
 }
 
-func (ncc *NewCertConfig) genPublicKey() (err error) {
-	ncc.PublicKey, err = genKeyPair(ncc.KeyType, ncc.KeyLength)
-	return
-}
+// func (ncc *NewCertConfig) genPublicKey() (err error) {
+// 	ncc.PublicKey, err = genKeyPair(ncc.KeyType, ncc.KeyLength)
+// 	return
+// }
 
 func (ncc *NewCertConfig) wildcard() {
 	if ncc.IsWaldcard {

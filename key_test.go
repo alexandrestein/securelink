@@ -15,6 +15,8 @@ func TestMarshalKeyPairs(t *testing.T) {
 		Long   bool
 		Error  bool
 	}{
+		{"Curve 25519", securelink.KeyTypeEd25519, securelink.KeyLengthEd25519, false, false},
+
 		{"EC 256", securelink.KeyTypeEc, securelink.KeyLengthEc256, false, false},
 		{"EC 384", securelink.KeyTypeEc, securelink.KeyLengthEc384, false, false},
 		{"EC 521", securelink.KeyTypeEc, securelink.KeyLengthEc521, false, false},

@@ -26,12 +26,15 @@ type (
 
 // Defines the supported key type
 const (
-	KeyTypeRSA KeyType = "RSA"
-	KeyTypeEc  KeyType = "Elliptic Curve"
+	KeyTypeEd25519 KeyType = "ed25519 Elliptic Curve"
+	KeyTypeRSA     KeyType = "RSA"
+	KeyTypeEc      KeyType = "NIST Elliptic Curve"
 )
 
 // Defines the supported key length
 const (
+	KeyLengthEd25519 KeyLength = "EC 25519"
+
 	KeyLengthRsa2048 KeyLength = "RSA 2048"
 	KeyLengthRsa3072 KeyLength = "RSA 3072"
 	KeyLengthRsa4096 KeyLength = "RSA 4096"
@@ -45,8 +48,8 @@ const (
 // Defaults values for NewCertConfig
 var (
 	DefaultCertLifeTime = time.Hour * 24 * 30 * 3 // 3 months
-	DefaultKeyType      = KeyTypeEc
-	DefaultKeyLength    = KeyLengthEc384
+	DefaultKeyType      = KeyTypeEd25519
+	DefaultKeyLength    = KeyLengthEd25519
 )
 
 // var (
@@ -87,7 +90,7 @@ func GetCertTemplate(names []string, ips []net.IP) *x509.Certificate {
 		// BasicConstraintsValid indicates whether IsCA, MaxPathLen,
 		// and MaxPathLenZero are valid.
 		BasicConstraintsValid: true,
-		IsCA: false,
+		IsCA:                  false,
 
 		// MaxPathLen and MaxPathLenZero indicate the presence and
 		// value of the BasicConstraints' "pathLenConstraint".

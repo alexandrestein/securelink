@@ -9,6 +9,8 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
+
+	"crypto/ed25519"
 )
 
 type (
@@ -34,6 +36,8 @@ type (
 // NewKeyPair builds a new key pair with the given options
 func NewKeyPair(keyType KeyType, keyLength KeyLength) (*KeyPair, error) {
 	switch keyType {
+	case KeyTypeEd25519:
+		return NewEd25519(), nil
 	case KeyTypeEc:
 		return NewEc(keyLength), nil
 	case KeyTypeRSA:
@@ -94,14 +98,19 @@ func NewEc(keyLength KeyLength) *KeyPair {
 	return ret
 }
 
+func NewEd25519() *KeyPair {
+	ret := newKeyPair(KeyTypeEd25519, KeyLengthEd25519)
+
+	publicKey, privateKey, _ := ed25519.GenerateKey(rand.Reader)
+	ret.Private = privateKey
+	ret.Public = publicKey
+
+	return ret
+}
+
 // GetPrivateDER returns a slice of bytes which represent the private key as DER encoded
 func (k *KeyPair) GetPrivateDER() []byte {
-	var ret []byte
-	if k.Type == KeyTypeRSA {
-		ret = x509.MarshalPKCS1PrivateKey(k.Private.(*rsa.PrivateKey))
-	} else if k.Type == KeyTypeEc {
-		ret, _ = x509.MarshalECPrivateKey(k.Private.(*ecdsa.PrivateKey))
-	}
+	ret, _ := x509.MarshalPKCS8PrivateKey(k.Private)
 	return ret
 }
 
@@ -109,10 +118,11 @@ func (k *KeyPair) GetPrivateDER() []byte {
 func (k *KeyPair) GetPrivatePEM() []byte {
 	der := k.GetPrivateDER()
 	t := ""
-	if k.Type == KeyTypeRSA {
-		t = "RSA PRIVATE KEY"
-	} else if k.Type == KeyTypeEc {
+	switch k.Type {
+	case KeyTypeEc, KeyTypeEd25519:
 		t = "EC PRIVATE KEY"
+	case KeyTypeRSA:
+		t = "RSA PRIVATE KEY"
 	}
 
 	return pem.EncodeToMemory(&pem.Block{
@@ -123,8 +133,8 @@ func (k *KeyPair) GetPrivatePEM() []byte {
 
 // Marshal marshal the actual KeyPair pointer to a slice of bytes
 func (k *KeyPair) Marshal() []byte {
-	cp := new(KeyPair)
-	*cp = *k
+	cp := new(keyPairExport)
+	cp.KeyPair = k
 
 	cp.Private = k.GetPrivateDER()
 	cp.Public = nil
@@ -147,23 +157,36 @@ func UnmarshalKeyPair(input []byte) (*KeyPair, error) {
 		Length: tmp.Length,
 	}
 
+	privateKey, err := x509.ParsePKCS8PrivateKey(tmp.Private)
+	if err != nil {
+		return nil, err
+	}
+
 	switch tmp.Type {
+	case KeyTypeEd25519:
+		privateEd25519Key, ok := privateKey.(ed25519.PrivateKey)
+		if !ok {
+			return nil, fmt.Errorf("key is not a valid curve 25519 key")
+		}
+
+		ret.Private = privateEd25519Key
+		ret.Public = privateEd25519Key.Public()
 	case KeyTypeRSA:
-		privateKey, err := x509.ParsePKCS1PrivateKey(tmp.Private)
-		if err != nil {
-			return nil, err
+		privateRSAKey, ok := privateKey.(*rsa.PrivateKey)
+		if !ok {
+			return nil, fmt.Errorf("key is not a valid RSA key")
 		}
 
-		ret.Private = privateKey
-		ret.Public = privateKey.Public()
+		ret.Private = privateRSAKey
+		ret.Public = privateRSAKey.Public()
 	case KeyTypeEc:
-		privateKey, err := x509.ParseECPrivateKey(tmp.Private)
-		if err != nil {
-			return nil, err
+		privateEcKey, ok := privateKey.(*ecdsa.PrivateKey)
+		if !ok {
+			return nil, fmt.Errorf("key is not a valid EC key")
 		}
 
-		ret.Private = privateKey
-		ret.Public = privateKey.Public()
+		ret.Private = privateEcKey
+		ret.Public = privateEcKey.Public()
 	}
 
 	return ret, nil

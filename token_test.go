@@ -18,6 +18,8 @@ func TestToken(t *testing.T) {
 		Length securelink.KeyLength
 		Long   bool
 	}{
+		{"Curve 25519", securelink.KeyTypeEd25519, securelink.KeyLengthEd25519, false},
+
 		{"EC 256", securelink.KeyTypeEc, securelink.KeyLengthEc256, false},
 		{"EC 384", securelink.KeyTypeEc, securelink.KeyLengthEc384, false},
 		{"EC 521", securelink.KeyTypeEc, securelink.KeyLengthEc521, false},

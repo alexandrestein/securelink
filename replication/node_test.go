@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/alexandrestein/gotinydb/replication"
-	"github.com/alexandrestein/gotinydb/replication/securelink"
+	"gitea.interlab-net.com/alexandre/securelink"
 )
 
 var (

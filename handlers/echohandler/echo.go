@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"regexp"
 
-	"github.com/alexandrestein/gotinydb/replication/securelink"
+	"gitea.interlab-net.com/alexandre/securelink"
 	"github.com/labstack/echo"
 )
 

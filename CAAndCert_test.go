@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/alexandrestein/gotinydb/replication/securelink"
+	"gitea.interlab-net.com/alexandre/securelink"
 )
 
 func TestNewCA(t *testing.T) {

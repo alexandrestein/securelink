@@ -3,7 +3,7 @@ package replication
 import (
 	"regexp"
 
-	"github.com/alexandrestein/gotinydb/replication/securelink"
+	"gitea.interlab-net.com/alexandre/securelink"
 )
 
 // Those variables defines the default certificates key algorithm and key size

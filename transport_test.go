@@ -10,7 +10,7 @@ import (
 
 	"github.com/labstack/echo"
 
-	"github.com/alexandrestein/gotinydb/replication/securelink"
+	"gitea.interlab-net.com/alexandre/securelink"
 )
 
 const (

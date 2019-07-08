@@ -8,7 +8,7 @@ import (
 
 	"gitea.interlab-net.com/alexandre/securelink/common"
 
-	"github.com/alexandrestein/gotinydb/replication/securelink"
+	"gitea.interlab-net.com/alexandre/securelink"
 )
 
 func TestToken(t *testing.T) {

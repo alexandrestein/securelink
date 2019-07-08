@@ -1,4 +1,4 @@
-module gitea.interlab-net.com/alexandre/securelink/securelink
+module gitea.interlab-net.com/alexandre/securelink
 
 go 1.13
 

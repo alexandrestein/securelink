@@ -110,6 +110,7 @@ func GetSignatureAlgorithm(keyType KeyType, keyLength KeyLength) x509.SignatureA
 // names are used as domain names.
 func NewCA(config *NewCertConfig, names ...string) (*Certificate, error) {
 	config.IsCA = true
+
 	cert, err := newCert(config, names...)
 	if err != nil {
 		return nil, err
@@ -133,7 +134,17 @@ func (c *Certificate) NewCert(config *NewCertConfig, names ...string) (*Certific
 		return nil, fmt.Errorf("this is not a CA")
 	}
 
+	if config == nil {
+		config = NewDefaultCertificationConfig()
+	}
+
 	config.Parent = c
+
+	if config.CertPool == nil {
+		config.CertPool = c.GetCertPool()
+	} else {
+		config.CertPool.AppendCertsFromPEM(c.GetCertPEM())
+	}
 
 	return newCert(config, names...)
 }
@@ -183,6 +194,11 @@ func newCert(config *NewCertConfig, names ...string) (*Certificate, error) {
 // GetCertPEM is useful to start a new client or server with tls.X509KeyPair
 func (c *Certificate) GetCertPEM() []byte {
 	return BuildCertPEM(c.Cert)
+}
+
+// GetKeyPEM returns the key files, it is similar to *Certificate.GetCertPEM.
+func (c *Certificate) GetKeyPEM() []byte {
+	return c.KeyPair.GetPrivatePEM()
 }
 
 // GetTLSCertificate is useful in
@@ -270,6 +286,8 @@ func NewDefaultCertificationConfig() *NewCertConfig {
 		LifeTime:  DefaultCertLifeTime,
 		KeyType:   DefaultKeyType,
 		KeyLength: DefaultKeyLength,
+
+		CertTemplate: GetCertTemplate(nil, nil),
 	}
 }
 

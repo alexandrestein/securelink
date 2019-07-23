@@ -13,8 +13,8 @@ import (
 )
 
 type (
-	// Server provides a good way to have many services on one sign open port.
-	// Regester services which are selected with a tls host name prefix.
+	// Server provides a good way to have many services on a single open port.
+	// Regester services which are specified with a tls host name prefix.
 	Server struct {
 		Echo        *echo.Echo
 		AddrStruct  *common.Addr

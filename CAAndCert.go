@@ -1,9 +1,7 @@
-// Package securelink is not really for certificate management.
-// It more a tool to make a cluster connection security easy.
-// Build an save your CA. It will be able to generate Certificate pointers which
-// can connect and check peer just on certificate validity.
+// Package securelink tries to simplify the work need to mange and build certificates.
 //
-// No need to check the host, you just want to make sur client and server use your CA.
+// This package can be used for PKI infrastructure, build a VPN like at the application level or
+// simply to build certificates very quickly with no hassle.
 package securelink
 
 import (
@@ -54,6 +52,7 @@ type (
 	}
 )
 
+// BuildCertPEM builds a PEM enceded x509 certificate
 func BuildCertPEM(cert *x509.Certificate) []byte {
 	return pem.EncodeToMemory(&pem.Block{
 		Type:  "CERTIFICATE",
@@ -79,7 +78,7 @@ func genKeyPair(keyType KeyType, keyLength KeyLength) (*KeyPair, error) {
 	return nil, ErrKeyConfigNotCompatible
 }
 
-// GetSignatureAlgorithm returns the signature algorithm for the given key type and key size
+// GetSignatureAlgorithm returns the signature algorithm for the given key type and size
 func GetSignatureAlgorithm(keyType KeyType, keyLength KeyLength) x509.SignatureAlgorithm {
 	if keyType == KeyTypeEd25519 {
 		return x509.PureEd25519
@@ -105,9 +104,8 @@ func GetSignatureAlgorithm(keyType KeyType, keyLength KeyLength) x509.SignatureA
 	return x509.UnknownSignatureAlgorithm
 }
 
-// NewCA returns a new CA pointer which is supposed to be used as server certificate
-// and client and server certificate for remote instances.
-// names are used as domain names.
+// NewCA returns a new CA pointer.
+// Names are used as domain names.
 func NewCA(config *NewCertConfig, names ...string) (*Certificate, error) {
 	config.IsCA = true
 
@@ -123,12 +121,14 @@ func NewCA(config *NewCertConfig, names ...string) (*Certificate, error) {
 	return cert, nil
 }
 
-// ID returns the id as big.Int pointer
+// ID returns the id of the certificate as big.Int pointer
 func (c *Certificate) ID() *big.Int {
 	return c.Cert.SerialNumber
 }
 
-// NewCert returns a new certificate pointer which can be used for tls connection
+// NewCert returns a new sign certificate with the given domains name.
+// You can specify the options you want. Some options are part of the package like "wildcard" certificate,
+// but others or based on the *x509.Certificate element inside *NewCertConfig.
 func (c *Certificate) NewCert(config *NewCertConfig, names ...string) (*Certificate, error) {
 	if !c.IsCA {
 		return nil, fmt.Errorf("this is not a CA")

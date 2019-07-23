@@ -92,6 +92,8 @@ func newTransportConn(conn net.Conn, server bool) (*TransportConn, error) {
 // This function contact the server at the given address with an "insecure" connection
 // to get it's certificate. Checks that the certificate is valid for the given certificate if given.
 // From the certificate it extract the first HostName which is return.
+//
+// In most case this function is called internally in the package.
 func GetID(addr string, cert *Certificate) (serverID string) {
 	tlsConfig := GetBaseTLSConfig("", cert)
 	tlsConfig.InsecureSkipVerify = true

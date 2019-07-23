@@ -98,6 +98,7 @@ func NewEc(keyLength KeyLength) *KeyPair {
 	return ret
 }
 
+// NewEd25519 builds a new key pair with the X25519 elliptic curve.
 func NewEd25519() *KeyPair {
 	ret := newKeyPair(KeyTypeEd25519, KeyLengthEd25519)
 

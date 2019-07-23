@@ -9,7 +9,7 @@ import (
 
 	"github.com/labstack/echo"
 
-	"gitea.interlab-net.com/alexandre/securelink/common"
+	"github.com/alexandre/securelink/common"
 )
 
 type (

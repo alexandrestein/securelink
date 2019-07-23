@@ -8,9 +8,9 @@ import (
 
 	"github.com/labstack/echo"
 
-	"gitea.interlab-net.com/alexandre/securelink"
+	"github.com/alexandre/securelink"
 
-	"gitea.interlab-net.com/alexandre/securelink/handlers/echohandler"
+	"github.com/alexandre/securelink/handlers/echohandler"
 )
 
 func TestMain(t *testing.T) {

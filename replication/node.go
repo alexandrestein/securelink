@@ -10,7 +10,7 @@ import (
 	"github.com/labstack/echo"
 
 	memberlistInterface "github.com/alexandrestein/gotinydb/replication/memberlist"
-	"gitea.interlab-net.com/alexandre/securelink"
+	"github.com/alexandre/securelink"
 )
 
 type (

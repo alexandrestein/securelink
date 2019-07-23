@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"gitea.interlab-net.com/alexandre/securelink/common"
+	"github.com/alexandre/securelink/common"
 
-	"gitea.interlab-net.com/alexandre/securelink"
+	"github.com/alexandre/securelink"
 )
 
 func TestToken(t *testing.T) {

@@ -1,4 +1,3 @@
-// module gitea.interlab-net.com/alexandre/securelink
 module github.com/alexandre/securelink
 
 go 1.13

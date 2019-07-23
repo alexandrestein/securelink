@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	"gitea.interlab-net.com/alexandre/securelink"
+	"github.com/alexandre/securelink"
 )
 
 func TestMarshalKeyPairs(t *testing.T) {

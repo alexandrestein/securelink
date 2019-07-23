@@ -66,7 +66,14 @@ var (
 	ErrKeyConfigNotCompatible = fmt.Errorf("the key type and key size are not compatible")
 )
 
-// GetCertTemplate returns the base template for certification
+// GetCertTemplate returns the base template for certification.
+// What is does:
+// - it generates an random ID
+// - sets the given names into the common names as wildcards
+// - adds ips into the IP field if given
+// - sets the certificate not before now and good for 1 year
+// - gives almost every permissions to the certificate
+// - sets the certificate as is not a CA
 func GetCertTemplate(names []string, ips []net.IP) *x509.Certificate {
 	serial, _ := rand.Int(rand.Reader, big.NewInt(math.MaxInt64))
 

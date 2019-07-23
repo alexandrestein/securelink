@@ -15,8 +15,7 @@ import (
 
 func Example_serverService() {
 	// Build the CA
-	conf := securelink.NewDefaultCertificationConfig()
-	conf.CertTemplate = securelink.GetCertTemplate(nil, nil)
+	conf := securelink.NewDefaultCertificationConfigWithDefaultTemplate("ca")
 	ca, _ := securelink.NewCA(conf, "ca")
 
 	// Build the server and the client certificates
@@ -84,8 +83,7 @@ func Example_serverService() {
 
 func Example_serverHTTP() {
 	// Build the CA
-	conf := securelink.NewDefaultCertificationConfig()
-	conf.CertTemplate = securelink.GetCertTemplate(nil, nil)
+	conf := securelink.NewDefaultCertificationConfigWithDefaultTemplate("ca")
 	ca, _ := securelink.NewCA(conf, "ca")
 
 	// Build the server and the client certificates
@@ -114,8 +112,7 @@ func Example_serverHTTP() {
 
 func Example_buildPKI() {
 	// Build the CA
-	conf := securelink.NewDefaultCertificationConfig()
-	conf.CertTemplate = securelink.GetCertTemplate(nil, nil)
+	conf := securelink.NewDefaultCertificationConfigWithDefaultTemplate("ca")
 	ca, _ := securelink.NewCA(conf, "ca")
 
 	// Build the server certificate

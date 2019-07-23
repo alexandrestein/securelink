@@ -1,4 +1,4 @@
-package securelink
+package cluster
 
 import (
 	"bytes"
@@ -8,6 +8,7 @@ import (
 	"time"
 
 	base91 "github.com/Equim-chan/base91-go"
+	"github.com/alexandrestein/securelink"
 	"github.com/alexandrestein/securelink/common"
 )
 
@@ -19,16 +20,16 @@ type (
 )
 
 // GetToken returns a string representation of a temporary token (10 minutes validity)
-func (s *Server) GetToken() (string, error) {
-	certConfig := NewDefaultCertificationConfigWithDefaultTemplate("TOKEN")
+func (n *Node) GetToken() (string, error) {
+	certConfig := securelink.NewDefaultCertificationConfigWithDefaultTemplate("TOKEN")
 	certConfig.LifeTime = time.Minute * 5
-	tmpCert, err := s.Certificate.NewCert(certConfig)
+	tmpCert, err := n.Certificate.NewCert(certConfig)
 	if err != nil {
 		return "", err
 	}
 
 	tokenObj := &token{
-		A: s.AddrStruct,
+		A: n.AddrStruct,
 		C: tmpCert.Marshal(),
 	}
 
@@ -57,7 +58,7 @@ func (s *Server) GetToken() (string, error) {
 // ReadToken returns values from the token.
 // It gives the server address of the signer and the temporary certificate for connection.
 // It returns error if any
-func ReadToken(tokenString string) (addr *common.Addr, certificate *Certificate, err error) {
+func ReadToken(tokenString string) (addr *common.Addr, certificate *securelink.Certificate, err error) {
 	compressed := base91.DecodeString(tokenString)
 
 	buf := bytes.NewBuffer(compressed)
@@ -89,7 +90,7 @@ func ReadToken(tokenString string) (addr *common.Addr, certificate *Certificate,
 		return nil, nil, err
 	}
 
-	certificate, err = Unmarshal(tokenObj.C)
+	certificate, err = securelink.Unmarshal(tokenObj.C)
 	if err != nil {
 		return nil, nil, err
 	}

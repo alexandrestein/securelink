@@ -1,4 +1,4 @@
-package securelink_test
+package cluster_test
 
 import (
 	"net"
@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/alexandrestein/securelink/cluster"
 	"github.com/alexandrestein/securelink/common"
 
 	"github.com/alexandrestein/securelink"
@@ -52,16 +53,18 @@ func TestToken(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			node := cluster.StartNode(s)
+			defer node.Close()
 
 			var token string
-			token, err = s.GetToken()
+			token, err = node.GetToken()
 			if err != nil {
 				t.Fatal(err)
 			}
 
 			var addr *common.Addr
 			var certFromToken *securelink.Certificate
-			addr, certFromToken, err = securelink.ReadToken(token)
+			addr, certFromToken, err = cluster.ReadToken(token)
 			if err != nil {
 				t.Fatal(err)
 			}

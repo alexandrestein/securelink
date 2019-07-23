@@ -10,6 +10,10 @@ import (
 // NewHTTPSConnector provides a HTTP/S client with custom root CA and with the
 // given client certificate
 func NewHTTPSConnector(host string, cert *Certificate) *http.Client {
+	if cert == nil {
+		return nil
+	}
+
 	return &http.Client{
 		Transport: &http.Transport{
 			TLSClientConfig: GetBaseTLSConfig(host, cert),

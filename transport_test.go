@@ -10,7 +10,7 @@ import (
 
 	"github.com/labstack/echo"
 
-	"github.com/alexandre/securelink"
+	"github.com/alexandrestein/securelink"
 )
 
 const (

@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/alexandre/securelink"
+	"github.com/alexandrestein/securelink"
 )
 
 func TestNewCA(t *testing.T) {

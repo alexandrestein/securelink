@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/alexandre/securelink/common"
+	"github.com/alexandrestein/securelink/common"
 
-	"github.com/alexandre/securelink"
+	"github.com/alexandrestein/securelink"
 )
 
 func TestToken(t *testing.T) {

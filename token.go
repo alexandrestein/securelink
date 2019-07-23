@@ -8,7 +8,7 @@ import (
 	"time"
 
 	base91 "github.com/Equim-chan/base91-go"
-	"github.com/alexandre/securelink/common"
+	"github.com/alexandrestein/securelink/common"
 )
 
 type (

@@ -9,7 +9,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/alexandre/securelink"
+	"github.com/alexandrestein/securelink"
 	"github.com/labstack/echo"
 )
 

@@ -3,7 +3,7 @@ package replication
 import (
 	"regexp"
 
-	"github.com/alexandre/securelink"
+	"github.com/alexandrestein/securelink"
 )
 
 // Those variables defines the default certificates key algorithm and key size

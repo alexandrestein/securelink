@@ -1,4 +1,4 @@
-module github.com/alexandre/securelink
+module github.com/alexandrestein/securelink
 
 go 1.13
 

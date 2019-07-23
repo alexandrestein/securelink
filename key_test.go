@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/alexandre/securelink"
+	"github.com/alexandrestein/securelink"
 )
 
 func TestMarshalKeyPairs(t *testing.T) {

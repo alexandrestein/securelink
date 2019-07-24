@@ -23,7 +23,7 @@ type InternalNode struct {
 
 // StartNode start the node services and returns the Node pointer
 func StartNode(server *securelink.Server) *Node {
-	return &Node{
+	n := &Node{
 		Server:       server,
 		InternalNode: &InternalNode{Master: big.NewInt(0)},
 		Nodes: []*InternalNode{
@@ -33,6 +33,10 @@ func StartNode(server *securelink.Server) *Node {
 			},
 		},
 	}
+
+	n.initHandlers()
+
+	return n
 }
 
 func (n *Node) Join(token string) error {

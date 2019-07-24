@@ -1,6 +1,7 @@
 package securelink
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
@@ -37,6 +38,9 @@ type (
 	TransportConn struct {
 		*tls.Conn
 		Server bool
+		Ctx    context.Context
+
+		cancel context.CancelFunc
 	}
 )
 
@@ -146,4 +150,8 @@ func (l *BaseListener) Close() error {
 // Addr implements the net.Listener interface
 func (l *BaseListener) Addr() net.Addr {
 	return l.AddrField
+}
+
+func (t *TransportConn) Close() error {
+	return t.Conn.Close()
 }

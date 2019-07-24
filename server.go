@@ -26,9 +26,7 @@ type (
 		getHostNameFromAddr FuncGetHostNameFromAddr
 	}
 
-	closedConn struct {
-		net.Conn
-	}
+	closedConn struct{}
 )
 
 // NewServer builds a new server. Provide the port you want the server to listen on.
@@ -110,12 +108,9 @@ func (s *Server) Accept() (net.Conn, error) {
 	if tlsConn.ConnectionState().ServerName != "" {
 		for _, service := range s.Handlers {
 			if service.Match(tc.ConnectionState().ServerName) {
-				// if service.matchFunction(tc.ConnectionState().ServerName) {
 				service.Handle(tc)
 
-				// closedConn :=
-
-				return &closedConn{conn}, nil
+				return &closedConn{}, nil
 			}
 		}
 	}
@@ -168,4 +163,25 @@ func (cc *closedConn) Write(b []byte) (n int, err error) {
 }
 func (cc *closedConn) error() error {
 	return fmt.Errorf("handeled")
+}
+
+func (cc *closedConn) Close() error {
+	return nil
+}
+func (cc *closedConn) LocalAddr() net.Addr {
+	add, _ := common.NewAddr(0)
+	return add
+}
+func (cc *closedConn) RemoteAddr() net.Addr {
+	add, _ := common.NewAddr(0)
+	return add
+}
+func (cc *closedConn) SetDeadline(t time.Time) error {
+	return nil
+}
+func (cc *closedConn) SetReadDeadline(t time.Time) error {
+	return nil
+}
+func (cc *closedConn) SetWriteDeadline(t time.Time) error {
+	return nil
 }

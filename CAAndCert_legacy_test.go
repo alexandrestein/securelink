@@ -1,4 +1,4 @@
-// +build !go1.1 !go1.2 !go1.3 !go1.4 !go1.5 !go1.6 !go1.7 !go1.8 !go1.9 !go1.10 !go1.11 !go1.12
+// +build go1.1 go1.2 go1.3 go1.4 go1.5 go1.6 go1.7 go1.8 go1.9 go1.10 go1.11 go1.12
 
 package securelink_test
 
@@ -19,8 +19,6 @@ func TestNewCA(t *testing.T) {
 		Long   bool
 		Error  bool
 	}{
-		{"Curve 25519", securelink.KeyTypeEd25519, securelink.KeyLengthEd25519, false, false},
-
 		{"EC 256", securelink.KeyTypeEc, securelink.KeyLengthEc256, false, false},
 		{"EC 384", securelink.KeyTypeEc, securelink.KeyLengthEc384, false, false},
 		{"EC 521", securelink.KeyTypeEc, securelink.KeyLengthEc521, false, false},
@@ -159,8 +157,6 @@ func TestCertificateMarshaling(t *testing.T) {
 		Length securelink.KeyLength
 		Long   bool
 	}{
-		{"Curve 25519", securelink.KeyTypeEd25519, securelink.KeyLengthEd25519, false},
-
 		{"EC 256", securelink.KeyTypeEc, securelink.KeyLengthEc256, false},
 		{"EC 384", securelink.KeyTypeEc, securelink.KeyLengthEc384, false},
 		{"EC 521", securelink.KeyTypeEc, securelink.KeyLengthEc521, false},

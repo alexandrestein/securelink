@@ -1,4 +1,4 @@
-// +build !go1.1 !go1.2 !go1.3 !go1.4 !go1.5 !go1.6 !go1.7 !go1.8 !go1.9 !go1.10 !go1.11 !go1.12
+// +build go1.1 go1.2 go1.3 go1.4 go1.5 go1.6 go1.7 go1.8 go1.9 go1.10 go1.11 go1.12
 
 package securelink
 
@@ -11,8 +11,6 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
-
-	"crypto/ed25519"
 )
 
 type (
@@ -38,8 +36,6 @@ type (
 // NewKeyPair builds a new key pair with the given options
 func NewKeyPair(keyType KeyType, keyLength KeyLength) (*KeyPair, error) {
 	switch keyType {
-	case KeyTypeEd25519:
-		return NewEd25519(), nil
 	case KeyTypeEc:
 		return NewEc(keyLength), nil
 	case KeyTypeRSA:
@@ -100,17 +96,6 @@ func NewEc(keyLength KeyLength) *KeyPair {
 	return ret
 }
 
-// NewEd25519 builds a new key pair with the X25519 elliptic curve.
-func NewEd25519() *KeyPair {
-	ret := newKeyPair(KeyTypeEd25519, KeyLengthEd25519)
-
-	publicKey, privateKey, _ := ed25519.GenerateKey(rand.Reader)
-	ret.Private = privateKey
-	ret.Public = publicKey
-
-	return ret
-}
-
 // GetPrivateDER returns a slice of bytes which represent the private key as DER encoded
 func (k *KeyPair) GetPrivateDER() []byte {
 	ret, _ := x509.MarshalPKCS8PrivateKey(k.Private)
@@ -122,7 +107,7 @@ func (k *KeyPair) GetPrivatePEM() []byte {
 	der := k.GetPrivateDER()
 	t := ""
 	switch k.Type {
-	case KeyTypeEc, KeyTypeEd25519:
+	case KeyTypeEc:
 		t = "EC PRIVATE KEY"
 	case KeyTypeRSA:
 		t = "RSA PRIVATE KEY"
@@ -166,14 +151,6 @@ func UnmarshalKeyPair(input []byte) (*KeyPair, error) {
 	}
 
 	switch tmp.Type {
-	case KeyTypeEd25519:
-		privateEd25519Key, ok := privateKey.(ed25519.PrivateKey)
-		if !ok {
-			return nil, fmt.Errorf("key is not a valid curve 25519 key")
-		}
-
-		ret.Private = privateEd25519Key
-		ret.Public = privateEd25519Key.Public()
 	case KeyTypeRSA:
 		privateRSAKey, ok := privateKey.(*rsa.PrivateKey)
 		if !ok {

@@ -1,4 +1,4 @@
-// +build !go1.1 !go1.2 !go1.3 !go1.4 !go1.5 !go1.6 !go1.7 !go1.8 !go1.9 !go1.10 !go1.11 !go1.12
+// +build go1.1 go1.2 go1.3 go1.4 go1.5 go1.6 go1.7 go1.8 go1.9 go1.10 go1.11 go1.12
 
 // Package securelink tries to simplify the work need to mange and build certificates.
 //
@@ -63,9 +63,7 @@ func BuildCertPEM(cert *x509.Certificate) []byte {
 }
 
 func genKeyPair(keyType KeyType, keyLength KeyLength) (*KeyPair, error) {
-	if keyType == KeyTypeEd25519 {
-		return NewEd25519(), nil
-	} else if keyType == KeyTypeRSA {
+	if keyType == KeyTypeRSA {
 		switch keyLength {
 		case KeyLengthRsa2048, KeyLengthRsa3072, KeyLengthRsa4096, KeyLengthRsa8192:
 			return NewRSA(keyLength), nil
@@ -82,9 +80,7 @@ func genKeyPair(keyType KeyType, keyLength KeyLength) (*KeyPair, error) {
 
 // GetSignatureAlgorithm returns the signature algorithm for the given key type and size
 func GetSignatureAlgorithm(keyType KeyType, keyLength KeyLength) x509.SignatureAlgorithm {
-	if keyType == KeyTypeEd25519 {
-		return x509.PureEd25519
-	} else if keyType == KeyTypeRSA {
+	if keyType == KeyTypeRSA {
 		switch keyLength {
 		case KeyLengthRsa2048:
 			return x509.SHA256WithRSAPSS

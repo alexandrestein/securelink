@@ -1,4 +1,4 @@
-// +build !go1.1 !go1.2 !go1.3 !go1.4 !go1.5 !go1.6 !go1.7 !go1.8 !go1.9 !go1.10 !go1.11 !go1.12
+// +build go1.1 go1.2 go1.3 go1.4 go1.5 go1.6 go1.7 go1.8 go1.9 go1.10 go1.11 go1.12
 
 package securelink
 
@@ -28,15 +28,12 @@ type (
 
 // Defines the supported key type
 const (
-	KeyTypeEd25519 KeyType = "ed25519 Elliptic Curve"
-	KeyTypeRSA     KeyType = "RSA"
-	KeyTypeEc      KeyType = "NIST Elliptic Curve"
+	KeyTypeRSA KeyType = "RSA"
+	KeyTypeEc  KeyType = "NIST Elliptic Curve"
 )
 
 // Defines the supported key length
 const (
-	KeyLengthEd25519 KeyLength = "EC 25519"
-
 	KeyLengthRsa2048 KeyLength = "RSA 2048"
 	KeyLengthRsa3072 KeyLength = "RSA 3072"
 	KeyLengthRsa4096 KeyLength = "RSA 4096"
@@ -50,8 +47,8 @@ const (
 // Defaults values for NewCertConfig
 var (
 	DefaultCertLifeTime = time.Hour * 24 * 30 * 3 // 3 months
-	DefaultKeyType      = KeyTypeEd25519
-	DefaultKeyLength    = KeyLengthEd25519
+	DefaultKeyType      = KeyTypeEc
+	DefaultKeyLength    = KeyLengthEc256
 )
 
 // var (

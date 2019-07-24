@@ -29,8 +29,7 @@ func TestMain(t *testing.T) {
 	}
 
 	echoService.Echo.GET("/", func(c echo.Context) error {
-		c.String(200, "OK")
-		return nil
+		return c.String(200, "OK")
 	})
 
 	go echoService.Start()
@@ -44,13 +43,15 @@ func TestMain(t *testing.T) {
 	s, _ := securelink.NewServer(1364, tlsConfig, cert, getNameFn)
 
 	s.RegisterService(echoService)
+	time.Sleep(time.Millisecond * 500)
 
-	time.Sleep(time.Minute)
-
-	cli := securelink.NewHTTPSConnector("1", cert)
-	resp, err := cli.Get("https://echo.localhost:1364/")
+	cli := securelink.NewHTTPSConnector("echo.1", cert)
+	resp, err := cli.Get("https://localhost:1364/")
 	if err != nil {
 		t.Fatal(err)
+	}
+	if resp.StatusCode != 200 {
+		t.Fatalf("response code is not 200 but: %d", resp.StatusCode)
 	}
 
 	buf, err := ioutil.ReadAll(resp.Body)

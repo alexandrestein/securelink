@@ -2,10 +2,12 @@ package securelink
 
 import (
 	"context"
-	"crypto/tls"
 	"crypto/x509"
 	"fmt"
 	"net"
+	"time"
+
+	"github.com/lucas-clemente/quic-go"
 )
 
 type (
@@ -36,9 +38,10 @@ type (
 
 	// TransportConn is an interface to
 	TransportConn struct {
-		*tls.Conn
-		Server bool
-		Ctx    context.Context
+		quic.Session
+		Stream quic.Stream
+		// Server bool
+		Ctx context.Context
 
 		cancel context.CancelFunc
 	}
@@ -77,15 +80,11 @@ func (t *BaseHandler) Match(hostName string) bool {
 	return t.MatchFunction(hostName)
 }
 
-func newTransportConn(conn net.Conn, server bool) (*TransportConn, error) {
-	tlsConn, ok := conn.(*tls.Conn)
-	if !ok {
-		return nil, fmt.Errorf("can't build Transport connection, the net.Conn interface is not a *tls.Conn pointer %T", conn)
-	}
-
+func newTransportConn(session quic.Session, stream quic.Stream) (*TransportConn, error) {
 	tc := &TransportConn{
-		Conn:   tlsConn,
-		Server: server,
+		Session: session,
+		Stream:  stream,
+		// Server:  server,
 	}
 
 	return tc, nil
@@ -101,21 +100,29 @@ func newTransportConn(conn net.Conn, server bool) (*TransportConn, error) {
 func GetID(addr string, cert *Certificate) (serverID string) {
 	tlsConfig := GetBaseTLSConfig("", cert)
 	tlsConfig.InsecureSkipVerify = true
-	conn, err := tls.Dial("tcp", string(addr), tlsConfig)
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	session, err := quic.DialAddrContext(ctx, addr, tlsConfig, nil)
 	if err != nil {
 		return ""
 	}
 
-	err = conn.Handshake()
-	if err != nil {
+	// conn, err := tls.Dial("tcp", string(addr), tlsConfig)
+	// if err != nil {
+	// 	return ""
+	// }
+
+	// err = conn.Handshake()
+	// if err != nil {
+	// 	return ""
+	// }
+
+	if len(session.ConnectionState().PeerCertificates) < 1 {
 		return ""
 	}
 
-	if len(conn.ConnectionState().PeerCertificates) < 1 {
-		return ""
-	}
-
-	remoteCert := conn.ConnectionState().PeerCertificates[0]
+	remoteCert := session.ConnectionState().PeerCertificates[0]
 	opts := x509.VerifyOptions{
 		Roots: cert.CertPool,
 	}
@@ -152,6 +159,31 @@ func (l *BaseListener) Addr() net.Addr {
 	return l.AddrField
 }
 
-func (t *TransportConn) Close() error {
-	return t.Conn.Close()
+// func (t *TransportConn) Close() error {
+// 	return t.Conn.Close()
+// }
+
+// func (t *TransportConn) LocalAddr() error {
+// 	return t.Conn.Close()
+// }
+
+func (t *TransportConn) Read(b []byte) (int, error) {
+	return t.Stream.Read(b)
 }
+func (t *TransportConn) Write(b []byte) (int, error) {
+	return t.Stream.Write(b)
+}
+
+func (t *TransportConn) SetDeadline(dlT time.Time) error {
+	return t.Stream.SetDeadline(dlT)
+}
+func (t *TransportConn) SetReadDeadline(dlT time.Time) error {
+	return t.Stream.SetReadDeadline(dlT)
+}
+func (t *TransportConn) SetWriteDeadline(dlT time.Time) error {
+	return t.Stream.SetWriteDeadline(dlT)
+}
+
+// func (t *TransportConn) Close() error {
+// 	return t.Stream.Close()
+// }

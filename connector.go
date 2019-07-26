@@ -1,10 +1,13 @@
 package securelink
 
 import (
+	"context"
 	"crypto/tls"
 	"net"
 	"net/http"
 	"time"
+
+	"github.com/lucas-clemente/quic-go"
 )
 
 // NewHTTPSConnector provides a HTTP/S client with custom root CA and with the
@@ -39,17 +42,30 @@ func GetBaseTLSConfig(host string, cert *Certificate) *tls.Config {
 func NewServiceConnector(addr, host string, cert *Certificate, timeout time.Duration) (net.Conn, error) {
 	tlsConfig := GetBaseTLSConfig(host, cert)
 
-	conn, err := tls.Dial("tcp", addr, tlsConfig)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	session, err := quic.DialAddrContext(ctx, addr, tlsConfig, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	err = conn.SetDeadline(time.Now().Add(timeout))
+	var stream quic.Stream
+	stream, err = session.OpenStream()
 	if err != nil {
 		return nil, err
 	}
 
-	tc, _ := newTransportConn(conn, false)
+	// conn, err := tls.Dial("tcp", addr, tlsConfig)
+	// if err != nil {
+	// 	return nil, err
+	// }
+
+	// err = conn.SetDeadline(time.Now().Add(timeout))
+	// if err != nil {
+	// 	return nil, err
+	// }
+
+	tc, _ := newTransportConn(session, stream)
 
 	return tc, nil
 }

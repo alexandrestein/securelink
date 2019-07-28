@@ -1,6 +1,7 @@
 package securelink_test
 
 import (
+	"bytes"
 	"fmt"
 	"testing"
 	"time"
@@ -287,28 +288,37 @@ func TestServer(t *testing.T) {
 		return
 	}
 
-	serviceName := "service name"
+	serviceName := "echo service"
 	listener, _ := s1.NewListener(serviceName)
 
 	go func() {
 		for {
-			fmt.Println("wait for accept")
 			conn, err := listener.Accept()
 			if err != nil {
 				t.Error(err)
 				return
 			}
 			defer conn.Close()
-			fmt.Println("accepted")
 
-			buff := []byte("Hello")
-			_, err = conn.Write(buff)
+			buff := make([]byte, 1024)
+
+			fmt.Println("reading")
+			var n int
+			n, err = conn.Read(buff)
 			if err != nil {
 				t.Error(err)
 				return
 			}
+
+			fmt.Println("writing")
+			buff = buff[:n]
+			conn.Write(buff)
+
+			fmt.Println("done")
 		}
 	}()
+
+	time.Sleep(time.Millisecond * 100)
 
 	conn, err := s2.Dial("localhost:3164", serviceName, time.Second)
 	if err != nil {
@@ -317,15 +327,38 @@ func TestServer(t *testing.T) {
 	}
 	defer conn.Close()
 
-	buff := make([]byte, 32)
-	n, err := conn.Read(buff)
+	buff := []byte("HELLO")
+	n, err := conn.Write(buff)
 	if err != nil {
 		t.Error(err)
 		return
 	}
-	buff = buff[:n]
+	if n != len(buff) {
+		t.Errorf("written expected %d but had %d", len(buff), n)
+		return
+	}
 
-	time.Sleep(time.Millisecond * 100)
+	time.Sleep(time.Millisecond * 500)
+
+	buff2 := make([]byte, 1024)
+	n, err = conn.Read(buff2)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	if n != len(buff) {
+		t.Errorf("written expected %d but had %d", len(buff), n)
+		return
+	}
+
+	buff2 = buff2[:n]
+
+	if !bytes.Equal(buff, buff2) {
+		t.Errorf("Response is not equal. Expected %q but had %q", string(buff), string(buff2))
+		return
+	}
+
+	conn.Close()
 
 	err = listener.Close()
 	if err != nil {
@@ -333,11 +366,29 @@ func TestServer(t *testing.T) {
 		return
 	}
 
-	conn, _ = s2.Dial("localhost:3164", serviceName, time.Second)
-	n, err := conn.Read([]byte("test transmission"))
-	fmt.Println("n, err", n, err)
+	time.Sleep(time.Millisecond * 100)
 
+	conn, err = s2.Dial("localhost:3164", serviceName, time.Second)
+	if err != nil {
+		t.Error(err)
+		return
+	}
 	defer conn.Close()
 
-	time.Sleep(time.Second)
+	n, err = conn.Write([]byte("test transmission"))
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	n, err = conn.Read(make([]byte, 1024))
+	fmt.Println("n, err", n, err)
+	if err == nil {
+		t.Errorf("No listener so the read should get an error")
+		return
+	}
+	if n != 0 {
+		t.Errorf("read should be zero but had: %d", n)
+		return
+	}
 }

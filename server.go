@@ -101,6 +101,7 @@ func (s *Server) handleConn(sess quic.Session) {
 		str, err := sess.AcceptStream()
 		if err != nil {
 			fmt.Println("Accepting stream failed:", err)
+			sess.Close()
 			return
 		}
 
@@ -108,12 +109,14 @@ func (s *Server) handleConn(sess quic.Session) {
 		target, err = s.getTarget(str)
 		if err != nil {
 			fmt.Println("Accepting getting target:", err)
+			sess.Close()
 			return
 		}
 
 		listener := s.Listeners[target]
 		if listener == nil {
 			fmt.Println("not target found", s.Listeners, target, len(target))
+			sess.Close()
 			return
 
 		}
@@ -193,19 +196,16 @@ newConn:
 		return nil, err
 	}
 
+	stream.SetDeadline(
+		time.Now().Add(timeout),
+	)
+
 	hash, err := blake2b.New(serviceNameSize, []byte{})
 	if err != nil {
 		return nil, err
 	}
 	hash.Write([]byte(serviceName))
 	key := hash.Sum(nil)
-	// buff := []byte(serviceName)
-	// if l := len(buff); l > serviceNameSize {
-	// 	return nil, fmt.Errorf("the serviceName is too long")
-	// } else {
-	// 	zeroBuff := make([]byte, serviceNameSize-l)
-	// 	buff = append(buff, zeroBuff...)
-	// }
 
 	_, err = stream.Write(key)
 	if err != nil {
@@ -216,6 +216,7 @@ newConn:
 		Stream:  stream,
 		session: session,
 	}
+
 	return conn, nil
 }
 

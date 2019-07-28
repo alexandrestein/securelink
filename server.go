@@ -100,7 +100,7 @@ func (s *Server) handleConn(sess quic.Session) {
 	for {
 		str, err := sess.AcceptStream()
 		if err != nil {
-			fmt.Println("Accepting stream failed:", err)
+			// fmt.Println("Accepting stream failed:", err)
 			sess.Close()
 			return
 		}
@@ -108,18 +108,24 @@ func (s *Server) handleConn(sess quic.Session) {
 		var target string
 		target, err = s.getTarget(str)
 		if err != nil {
-			fmt.Println("Accepting getting target:", err)
+			// fmt.Println("Accepting getting target:", err)
 			sess.Close()
 			return
 		}
 
 		listener := s.Listeners[target]
 		if listener == nil {
-			fmt.Println("not target found", s.Listeners, target, len(target))
+			// fmt.Println("not target found", s.Listeners, target, len(target))
 			sess.Close()
 			return
-
 		}
+
+		// _,err = str.Write([]byte{1})
+		// if listener == nil {
+		// 	fmt.Println("error writing confirmation"))
+		// 	sess.Close()
+		// 	return
+		// }
 
 		go func() {
 			// ctx, cancel := context.WithCancel(sess.Context())
@@ -286,7 +292,6 @@ func (ll *localListener) Accept() (net.Conn, error) {
 }
 
 func (ll *localListener) Close() error {
-	fmt.Println("asked for close")
 	ll.server.lock.Lock()
 	defer ll.server.lock.Unlock()
 
@@ -297,7 +302,6 @@ func (ll *localListener) Close() error {
 	listenerKeyAsHex := hex.EncodeToString(listenerKey)
 
 	delete(ll.server.Listeners, listenerKeyAsHex)
-	fmt.Println("closed")
 	return nil
 }
 

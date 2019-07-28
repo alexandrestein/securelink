@@ -2,7 +2,6 @@ package securelink_test
 
 import (
 	"bytes"
-	"fmt"
 	"testing"
 	"time"
 
@@ -302,7 +301,6 @@ func TestServer(t *testing.T) {
 
 			buff := make([]byte, 1024)
 
-			fmt.Println("reading")
 			var n int
 			n, err = conn.Read(buff)
 			if err != nil {
@@ -310,11 +308,8 @@ func TestServer(t *testing.T) {
 				return
 			}
 
-			fmt.Println("writing")
 			buff = buff[:n]
 			conn.Write(buff)
-
-			fmt.Println("done")
 		}
 	}()
 
@@ -382,7 +377,6 @@ func TestServer(t *testing.T) {
 	}
 
 	n, err = conn.Read(make([]byte, 1024))
-	fmt.Println("n, err", n, err)
 	if err == nil {
 		t.Errorf("No listener so the read should get an error")
 		return

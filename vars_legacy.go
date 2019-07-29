@@ -13,19 +13,6 @@ import (
 	"time"
 )
 
-type (
-	// FuncGetHostNameFromAddr get the host name to check during dial from the
-	// address we try to contact
-	FuncGetHostNameFromAddr func(addr string) (hostName string)
-	// FuncServiceMatch is a simple function type which based on a string tells if
-	// the match is true or not
-	FuncServiceMatch func(serverName string) (match bool)
-
-	// FuncHandler defines the type of function the handler use
-	// when accessing to the related Handler
-	FuncHandler func(conn net.Conn) (err error)
-)
-
 // Defines the supported key type
 const (
 	KeyTypeRSA KeyType = "RSA"

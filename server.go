@@ -3,6 +3,7 @@ package securelink
 import (
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/hex"
 	"fmt"
 	"net"
@@ -31,40 +32,29 @@ type (
 
 		Sessions map[string]quic.Session
 
-		getHostNameFromAddr FuncGetHostNameFromAddr
-
-		lock *sync.Mutex
+		lock *sync.RWMutex
 	}
-
-	closedConn struct{}
 )
 
 // NewServer builds a new server. Provide the port you want the server to listen on.
 // The TLS configuration you want to use with a certificate pointer.
 // getHostNameFromAddr is a function which gets the remote server hostname.
 // This will be used to check the certificate name the server is giving.
-func NewServer(port uint16, tlsConfig *tls.Config, cert *Certificate, getHostNameFromAddr FuncGetHostNameFromAddr) (*Server, error) {
+func NewServer(port uint16, tlsConfig *tls.Config, cert *Certificate) (*Server, error) {
 	addr, err := common.NewAddr(port)
 	if err != nil {
 		return nil, err
 	}
 
-	tlsConfig.NextProtos = append(tlsConfig.NextProtos, "h2", "http/1.1")
-
-	// var tlsListener net.Listener
-	// tlsListener, err = tls.Listen("tcp", addr.ForListenerBroadcast(), tlsConfig)
+	quicConfig := &quic.Config{
+		KeepAlive: true,
+	}
 
 	var quicListener quic.Listener
-	quicListener, err = quic.ListenAddr(addr.ForListenerBroadcast(), tlsConfig, nil)
+	quicListener, err = quic.ListenAddr(addr.ForListenerBroadcast(), tlsConfig, quicConfig)
 
 	if err != nil {
 		return nil, err
-	}
-
-	if getHostNameFromAddr == nil {
-		getHostNameFromAddr = func(s string) string {
-			return GetID(s, cert)
-		}
 	}
 
 	s := &Server{
@@ -76,18 +66,17 @@ func NewServer(port uint16, tlsConfig *tls.Config, cert *Certificate, getHostNam
 
 		Sessions: make(map[string]quic.Session),
 
-		getHostNameFromAddr: getHostNameFromAddr,
-
-		lock: &sync.Mutex{},
+		lock: &sync.RWMutex{},
 	}
-
-	// quic.ListenAndServeTLSConfig(addr.ForListenerBroadcast(), tlsConfig, s.Echo.h)
 
 	go func() {
 		for {
 			sess, err := s.Listener.Accept()
 			if err != nil {
-				fmt.Println("error in accept", err)
+				if err.Error() == "server closed" {
+					return
+				}
+				continue
 			}
 			go s.handleConn(sess)
 		}
@@ -113,34 +102,21 @@ func (s *Server) handleConn(sess quic.Session) {
 			return
 		}
 
+		s.lock.RLock()
 		listener := s.Listeners[target]
+		s.lock.RUnlock()
 		if listener == nil {
 			// fmt.Println("not target found", s.Listeners, target, len(target))
 			sess.Close()
 			return
 		}
 
-		// _,err = str.Write([]byte{1})
-		// if listener == nil {
-		// 	fmt.Println("error writing confirmation"))
-		// 	sess.Close()
-		// 	return
-		// }
-
 		go func() {
-			// ctx, cancel := context.WithCancel(sess.Context())
-			// defer cancel()
-
 			conn := &localConn{
-				// ctx:     ctx,
 				Stream:  str,
 				session: sess,
 			}
 			listener.connChan <- conn
-
-			// buff := make([]byte, 1024)
-			// str.Read(buff)
-			// fmt.Println("handler needs to be made", string(buff))
 		}()
 	}
 }
@@ -161,40 +137,25 @@ func (s *Server) getTarget(str quic.Stream) (string, error) {
 
 // Close implements the net.Listener interface
 func (s *Server) Close() error {
+	s.lock.RLock()
+	listeners := map[string]*localListener{}
+	sessions := map[string]quic.Session{}
+	listeners, sessions = s.Listeners, s.Sessions
+	s.lock.RUnlock()
+	for _, listener := range listeners {
+		listener.Close()
+	}
+	for _, session := range sessions {
+		session.Close()
+	}
 	return s.Listener.Close()
 }
 
 // Dial is used to connect to on other server and set a prefix to access specific registered service
 func (s *Server) Dial(addr, serviceName string, timeout time.Duration) (net.Conn, error) {
-	session := s.Sessions[addr]
-newConn:
-	if session == nil {
-		hostName := s.getHostNameFromAddr(addr)
-
-		// if serviceName != "" {
-		// 	hostName = fmt.Sprintf("%s.%s", serviceName, hostName)
-		// }
-
-		tlsConfig := &tls.Config{}
-		*tlsConfig = *s.TLSConfig
-		tlsConfig.ServerName = hostName
-
-		ctx, cancel := context.WithTimeout(context.Background(), timeout)
-		defer cancel()
-
-		var err error
-		session, err = quic.DialAddrContext(ctx, addr, tlsConfig, nil)
-		if err != nil {
-			return nil, err
-		}
-
-		s.Sessions[addr] = session
-	} else {
-		err := session.Context().Err()
-		if err != nil {
-			session = nil
-			goto newConn
-		}
+	session, err := s.dial(addr, timeout)
+	if err != nil {
+		return nil, err
 	}
 
 	stream, err := session.OpenStream()
@@ -226,6 +187,74 @@ newConn:
 	return conn, nil
 }
 
+func (s *Server) dial(addr string, timeout time.Duration) (quic.Session, error) {
+	s.lock.RLock()
+	session := s.Sessions[addr]
+	s.lock.RUnlock()
+	if session != nil {
+		return session, nil
+	}
+
+newConn:
+	tlsConfig := s.TLSConfig.Clone()
+	tlsConfig.InsecureSkipVerify = true
+
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	var quicConfig *quic.Config
+	if timeout != 0 {
+		quicConfig = &quic.Config{
+			HandshakeTimeout: timeout,
+		}
+	}
+
+	session, err := quic.DialAddrContext(ctx, addr, tlsConfig, quicConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	if !s.verifyRemoteCert(session.ConnectionState()) {
+		session.Close()
+		return nil, fmt.Errorf("bad certificate")
+	}
+
+	s.lock.Lock()
+	s.Sessions[addr] = session
+	s.lock.Unlock()
+
+	go func() {
+		<-session.Context().Done()
+		s.lock.Lock()
+		delete(s.Sessions, addr)
+		s.lock.Unlock()
+	}()
+
+	err = session.Context().Err()
+	if err != nil {
+		session = nil
+		goto newConn
+	}
+
+	return session, nil
+}
+
+func (s *Server) verifyRemoteCert(connState tls.ConnectionState) bool {
+	verifyOptions := x509.VerifyOptions{
+		Roots: s.Certificate.GetCertPool(),
+	}
+	for _, cert := range connState.PeerCertificates {
+		_, err := cert.Verify(verifyOptions)
+		if err != nil {
+			continue
+		}
+
+		return true
+	}
+
+	return false
+}
+
 func (s *Server) NewListener(name string) (net.Listener, error) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
@@ -238,14 +267,6 @@ func (s *Server) NewListener(name string) (net.Listener, error) {
 	key := hash.Sum(nil)
 	keyAsString := hex.EncodeToString(key)
 
-	// buff := []byte(name)
-	// l := len(buff)
-	// if l > 32 {
-	// 	return nil, fmt.Errorf("the name is too long")
-	// }
-
-	// zeroBuff := make([]byte, serviceNameSize-l)
-	// buff = append(buff, zeroBuff...)
 	existingListener := s.Listeners[keyAsString]
 	if existingListener != nil {
 		return nil, fmt.Errorf("a listener with the same name is already registered")
@@ -264,7 +285,6 @@ func (s *Server) NewListener(name string) (net.Listener, error) {
 
 type (
 	localConn struct {
-		// ctx context.Context
 		quic.Stream
 		session quic.Session
 	}
@@ -307,4 +327,16 @@ func (ll *localListener) Close() error {
 
 func (ll *localListener) Addr() net.Addr {
 	return ll.server.Listener.Addr()
+}
+
+// GetBaseTLSConfig returns a TLS configuration with the given certificate as
+// "Certificate" and setup the "RootCAs" with the given certificate CertPool
+func GetBaseTLSConfig(host string, cert *Certificate) *tls.Config {
+	return &tls.Config{
+		ServerName:   host,
+		Certificates: []tls.Certificate{cert.GetTLSCertificate()},
+		RootCAs:      cert.GetCertPool(),
+		ClientCAs:    cert.GetCertPool(),
+		ClientAuth:   tls.RequireAndVerifyClientCert,
+	}
 }

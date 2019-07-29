@@ -1,8 +1,12 @@
 {
     "[go]": {
         "testOnSave": false,
-        "testTimeout": "0s",
         "coverOnSave": false,
         "coverOnSingleTest": false,
-    }
+    },
+    "go.testTimeout": "10s",
+    "go.testFlags": [
+        "-short",
+        "-v",
+    ],
 }

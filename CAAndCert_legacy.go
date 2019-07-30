@@ -209,17 +209,7 @@ func (c *Certificate) GetTLSCertificate() tls.Certificate {
 
 // GetCertPool is useful in tls.Config{RootCAs: ca.GetCertPool()}
 func (c *Certificate) GetCertPool() *x509.CertPool {
-	pool := x509.NewCertPool()
-
-	if !c.IsCA {
-		if c.CertPool != nil {
-			return c.CertPool
-		}
-		pool.AddCert(c.CACert)
-	}
-	pool.AddCert(c.Cert)
-
-	return pool
+	return c.CertPool
 }
 
 // Marshal convert the Certificate pointer into a slice of byte for

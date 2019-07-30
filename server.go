@@ -6,10 +6,13 @@ import (
 	"crypto/x509"
 	"encoding/hex"
 	"fmt"
+	"log"
 	"net"
+	"os"
 	"sync"
 	"time"
 
+	"github.com/labstack/echo"
 	"github.com/lucas-clemente/quic-go"
 	"golang.org/x/crypto/blake2b"
 
@@ -30,6 +33,8 @@ type (
 		TLSConfig   *tls.Config
 		Listeners   map[string]*localListener
 
+		Logger *log.Logger
+
 		ctx context.Context
 
 		Sessions map[string]quic.Session
@@ -48,6 +53,8 @@ func NewServer(ctx context.Context, port uint16, tlsConfig *tls.Config, cert *Ce
 		return nil, err
 	}
 
+	logger := log.New(os.Stdout, fmt.Sprintf("securelink-server :%d", port), log.LstdFlags)
+
 	quicConfig := &quic.Config{
 		KeepAlive: true,
 	}
@@ -65,6 +72,8 @@ func NewServer(ctx context.Context, port uint16, tlsConfig *tls.Config, cert *Ce
 		Certificate: cert,
 		TLSConfig:   tlsConfig,
 		Listeners:   make(map[string]*localListener),
+
+		Logger: logger,
 
 		ctx: ctx,
 
@@ -350,4 +359,16 @@ func GetBaseTLSConfig(host string, cert *Certificate) *tls.Config {
 		ClientCAs:    cert.GetCertPool(),
 		ClientAuth:   tls.RequireAndVerifyClientCert,
 	}
+}
+
+// NewHTTPEchoServer prepar a Echo server. To start it you need to run:
+// e.StartServer(&http.Server{}) after you have set the routes.
+func NewHTTPEchoServer(ln net.Listener) *echo.Echo {
+	e := echo.New()
+
+	e.Listener = ln
+	e.HideBanner = true
+	e.HidePort = true
+
+	return e
 }

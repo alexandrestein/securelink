@@ -20,6 +20,7 @@ func initServers(ctx context.Context, n int) (ca *securelink.Certificate, server
 	for i := range servers {
 		conf = securelink.NewDefaultCertificationConfig()
 		conf.CertTemplate = securelink.GetCertTemplate(nil, nil)
+		conf.IsCA = true
 		cert, _ := ca.NewCert(conf)
 		server, _ := securelink.NewServer(ctx, 3160+uint16(i), securelink.GetBaseTLSConfig(fmt.Sprint(i), cert), cert)
 

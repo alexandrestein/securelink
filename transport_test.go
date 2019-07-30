@@ -11,7 +11,7 @@ import (
 	"github.com/alexandrestein/securelink"
 )
 
-func initServers(n int) (ca *securelink.Certificate, servers []*securelink.Server) {
+func initServers(ctx context.Context, n int) (ca *securelink.Certificate, servers []*securelink.Server) {
 	conf := securelink.NewDefaultCertificationConfig()
 	conf.CertTemplate = securelink.GetCertTemplate(nil, nil)
 	ca, _ = securelink.NewCA(conf, "ca")
@@ -21,7 +21,7 @@ func initServers(n int) (ca *securelink.Certificate, servers []*securelink.Serve
 		conf = securelink.NewDefaultCertificationConfig()
 		conf.CertTemplate = securelink.GetCertTemplate(nil, nil)
 		cert, _ := ca.NewCert(conf)
-		server, _ := securelink.NewServer(3160+uint16(i), securelink.GetBaseTLSConfig(fmt.Sprint(i), cert), cert)
+		server, _ := securelink.NewServer(ctx, 3160+uint16(i), securelink.GetBaseTLSConfig(fmt.Sprint(i), cert), cert)
 
 		servers[i] = server
 	}
@@ -73,7 +73,10 @@ func echoFn(ctx context.Context, t *testing.T, listener net.Listener) {
 }
 
 func TestServerAndClosedListener(t *testing.T) {
-	_, servers := initServers(2)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+
+	_, servers := initServers(ctx, 2)
 
 	s0 := servers[0]
 	defer s0.Close()
@@ -84,9 +87,6 @@ func TestServerAndClosedListener(t *testing.T) {
 	serviceName := "echo service"
 	listener, _ := s0.NewListener(serviceName)
 	defer listener.Close()
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
 	go echoFn(ctx, t, listener)
 
@@ -178,21 +178,21 @@ func TestServerAndClosedListener(t *testing.T) {
 }
 
 func TestServerBadCertificates(t *testing.T) {
-	_, servers := initServers(1)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+
+	_, servers := initServers(ctx, 1)
 
 	s0 := servers[0]
 	defer s0.Close()
 
-	_, servers = initServers(2)
+	_, servers = initServers(ctx, 2)
 	s1 := servers[1]
 	defer s1.Close()
 
 	serviceName := "echo service"
 	listener, _ := s0.NewListener(serviceName)
 	defer listener.Close()
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
 	go echoFn(ctx, t, listener)
 

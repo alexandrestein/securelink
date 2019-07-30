@@ -7,4 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased](https://github.com/alexandrestein/securelink/compare/v0.0.4...master)
 
+### Changed
+-Move from TLS to QUIC
+
 ## [0.0.4](https://github.com/alexandrestein/securelink/releases/tag/v0.0.4)

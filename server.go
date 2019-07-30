@@ -30,6 +30,8 @@ type (
 		TLSConfig   *tls.Config
 		Listeners   map[string]*localListener
 
+		ctx context.Context
+
 		Sessions map[string]quic.Session
 
 		lock *sync.RWMutex
@@ -40,7 +42,7 @@ type (
 // The TLS configuration you want to use with a certificate pointer.
 // getHostNameFromAddr is a function which gets the remote server hostname.
 // This will be used to check the certificate name the server is giving.
-func NewServer(port uint16, tlsConfig *tls.Config, cert *Certificate) (*Server, error) {
+func NewServer(ctx context.Context, port uint16, tlsConfig *tls.Config, cert *Certificate) (*Server, error) {
 	addr, err := common.NewAddr(port)
 	if err != nil {
 		return nil, err
@@ -63,6 +65,8 @@ func NewServer(port uint16, tlsConfig *tls.Config, cert *Certificate) (*Server, 
 		Certificate: cert,
 		TLSConfig:   tlsConfig,
 		Listeners:   make(map[string]*localListener),
+
+		ctx: ctx,
 
 		Sessions: make(map[string]quic.Session),
 
@@ -106,7 +110,6 @@ func (s *Server) handleConn(sess quic.Session) {
 		listener := s.Listeners[target]
 		s.lock.RUnlock()
 		if listener == nil {
-			// fmt.Println("not target found", s.Listeners, target, len(target))
 			sess.Close()
 			return
 		}
@@ -116,7 +119,11 @@ func (s *Server) handleConn(sess quic.Session) {
 				Stream:  str,
 				session: sess,
 			}
-			listener.connChan <- conn
+			select {
+			case listener.connChan <- conn:
+			case <-s.ctx.Done():
+				return
+			}
 		}()
 	}
 }
@@ -281,6 +288,10 @@ func (s *Server) NewListener(name string) (net.Listener, error) {
 	s.Listeners[keyAsString] = ll
 
 	return ll, nil
+}
+
+func (s *Server) Ctx() context.Context {
+	return s.ctx
 }
 
 type (

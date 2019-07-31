@@ -13,22 +13,20 @@ import (
 	"github.com/alexandrestein/securelink"
 )
 
-func initServers(ctx context.Context, n int) (ca *securelink.Certificate, servers []*securelink.Server) {
+func initServers(ctx context.Context, n, portOffset int) (ca *securelink.Certificate, servers []*securelink.Server) {
 	conf := securelink.NewDefaultCertificationConfig()
-	// conf.KeyType = securelink.KeyTypeEc
-	// conf.KeyLength = securelink.KeyLengthEc256
 	ca, _ = securelink.NewCA(conf, "ca")
 
 	servers = make([]*securelink.Server, n)
 	for i := range servers {
 		conf = securelink.NewDefaultCertificationConfig()
-		// conf.CertTemplate = securelink.GetCertTemplate(nil, nil)
-		conf.KeyType = securelink.KeyTypeEc
-		conf.KeyLength = securelink.KeyLengthEc256
 		conf.IsCA = true
 		cert, _ := ca.NewCert(conf)
-		server, _ := securelink.NewServer(ctx, 3160+uint16(i), securelink.GetBaseTLSConfig(fmt.Sprint(i), cert), cert)
-		server.Logger.SetLevel(logrus.TraceLevel)
+		server,_ := securelink.NewServer(ctx, 3160+uint16(i)+uint16(portOffset), securelink.GetBaseTLSConfig(fmt.Sprint(i), cert), cert)
+
+		if testing.Verbose() {
+			server.Logger.SetLevel(logrus.TraceLevel)
+		}
 
 		servers[i] = server
 	}
@@ -83,7 +81,7 @@ func TestServerAndClosedListener(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
-	_, servers := initServers(ctx, 2)
+	_, servers := initServers(ctx, 2, 0)
 
 	s0 := servers[0]
 	defer s0.Close()
@@ -188,13 +186,13 @@ func TestServerBadCertificates(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
-	_, servers := initServers(ctx, 1)
+	_, servers := initServers(ctx, 1, 0)
 
 	s0 := servers[0]
 	defer s0.Close()
 
-	_, servers = initServers(ctx, 2)
-	s1 := servers[1]
+	_, servers = initServers(ctx, 1, 1)
+	s1 := servers[0]
 	defer s1.Close()
 
 	serviceName := "echo service"

@@ -35,18 +35,11 @@ const (
 // Defaults values for NewCertConfig
 var (
 	DefaultCertLifeTime = time.Hour * 24 * 30 * 3 // 3 months
-	DefaultKeyType      = KeyTypeEd25519
-	DefaultKeyLength    = KeyLengthEd25519
+	// DefaultKeyType      = KeyTypeEd25519
+	// DefaultKeyLength    = KeyLengthEd25519
+	DefaultKeyType   = KeyTypeEc
+	DefaultKeyLength = KeyLengthEc256
 )
-
-// var (
-// 	jwtNewNodeAudience  = "newClient"
-// 	jwtNewNodeExpiresAt = func() int64 { return time.Now().Add(securecache.CacheValueWaitingRequestsTimeOut).Unix() }
-// 	jwtNewNodeID        = uuid.NewV4().String
-// 	jwtNewNodeIssuedAt  = func() int64 { return time.Now().Unix() }
-// 	jwtNewNodeNotBefore = jwtNewNodeIssuedAt
-// 	jwtNewNodeSubject   = "go-DB"
-// )
 
 // Those variables defines the most common package errors
 var (

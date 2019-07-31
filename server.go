@@ -96,6 +96,8 @@ func NewServer(ctx context.Context, port uint16, tlsConfig *tls.Config, cert *Ce
 		}
 	}()
 
+	s.Logger.Infof("server started on port %d", addr.Port)
+
 	return s, nil
 }
 
@@ -214,28 +216,11 @@ func (s *Server) dial(addr string, timeout time.Duration) (quic.Session, error) 
 	}
 
 newConn:
-	tlsConfig := s.TLSConfig.Clone()
-	// tlsConfig.InsecureSkipVerify = true
 
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
-	var quicConfig *quic.Config
-	if timeout != 0 {
-		quicConfig = &quic.Config{
-			HandshakeTimeout: timeout,
-		}
-	}
-
-	session, err := quic.DialAddrContext(ctx, addr, tlsConfig, quicConfig)
+	session, err := DialQuic(s.TLSConfig, addr, timeout)
 	if err != nil {
 		return nil, err
 	}
-
-	// if !s.verifyRemoteCert(session.ConnectionState()) {
-	// 	session.Close()
-	// 	return nil, fmt.Errorf("bad certificate")
-	// }
 
 	s.lock.Lock()
 	s.Sessions[addr] = session
@@ -256,22 +241,6 @@ newConn:
 
 	return session, nil
 }
-
-// func (s *Server) verifyRemoteCert(connState tls.ConnectionState) bool {
-// 	verifyOptions := x509.VerifyOptions{
-// 		Roots: s.Certificate.GetCertPool(),
-// 	}
-// 	for _, cert := range connState.PeerCertificates {
-// 		_, err := cert.Verify(verifyOptions)
-// 		if err != nil {
-// 			continue
-// 		}
-
-// 		return true
-// 	}
-
-// 	return false
-// }
 
 func (s *Server) NewListener(name string) (net.Listener, error) {
 	s.lock.Lock()
@@ -373,4 +342,20 @@ func NewHTTPEchoServer(ln net.Listener) *echo.Echo {
 	e.HidePort = true
 
 	return e
+}
+
+func DialQuic(tlsConfig *tls.Config, addr string, timeout time.Duration) (quic.Session, error) {
+	tlsConfigClone := tlsConfig.Clone()
+
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	var quicConfig *quic.Config
+	if timeout != 0 {
+		quicConfig = &quic.Config{
+			HandshakeTimeout: timeout,
+		}
+	}
+
+	return quic.DialAddrContext(ctx, addr, tlsConfigClone, quicConfig)
 }

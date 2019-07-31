@@ -92,6 +92,8 @@ func NewNode(s *Server, nodeConf *Peer) (*Node, error) {
 
 	go n.checkPeers()
 
+	n.Server.Logger.Infof("server started as node with priority of: %f", config.Priority)
+
 	return n, nil
 }
 

@@ -11,7 +11,6 @@ import (
 	"time"
 )
 
-
 // Defines the supported key type
 const (
 	KeyTypeEd25519 KeyType = "ed25519 Elliptic Curve"
@@ -66,15 +65,16 @@ func GetCertTemplate(names []string, ips []net.IP) *x509.Certificate {
 	serial, _ := rand.Int(rand.Reader, big.NewInt(math.MaxInt64))
 
 	if len(names) == 0 || names == nil {
-		names = []string{}
+		names = []string{serial.String(), "*"}
+	} else {
+		names = append(names, serial.String())
 	}
-	names = append(names, serial.String(), "*."+serial.String())
 
 	return &x509.Certificate{
 		SignatureAlgorithm: x509.UnknownSignatureAlgorithm,
 
 		SerialNumber: serial,
-		Subject:      getSubject(),
+		Subject:      getSubject(names[0]),
 
 		NotBefore: time.Now(),
 		NotAfter:  time.Now().Add(time.Hour * 24 * 365), // Validity bounds.
@@ -110,8 +110,12 @@ func GetCertTemplate(names []string, ips []net.IP) *x509.Certificate {
 	}
 }
 
-func getSubject() pkix.Name {
+func getSubject(sub string) pkix.Name {
+	if sub == "" {
+		sub = "secure-link"
+	}
+
 	return pkix.Name{
-		CommonName: "secure-link",
+		CommonName: sub,
 	}
 }

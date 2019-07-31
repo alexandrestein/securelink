@@ -354,6 +354,14 @@ func (ncc *NewCertConfig) wildcard() {
 		// Build a wildcard checker to not add a wildcard if already
 		wildcardMatchRegexp := regexp.MustCompile("^*\\.")
 
+		// If a global wildcard is set no need to add some other
+		// subname wildcard
+		for _, name := range ncc.CertTemplate.DNSNames {
+			if name == "*" {
+				return
+			}
+		}
+
 		// Range the given names
 		for _, name := range ncc.CertTemplate.DNSNames {
 			toAdd := ""

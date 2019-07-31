@@ -38,7 +38,6 @@ func TestToken(t *testing.T) {
 			}
 
 			conf := securelink.NewDefaultCertificationConfig()
-			conf.CertTemplate = securelink.GetCertTemplate(nil, nil)
 			conf.KeyType = test.Type
 			conf.KeyLength = test.Length
 

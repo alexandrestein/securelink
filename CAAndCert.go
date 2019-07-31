@@ -1,5 +1,3 @@
-// +build !go1.1 !go1.2 !go1.3 !go1.4 !go1.5 !go1.6 !go1.7 !go1.8 !go1.9 !go1.10 !go1.11 !go1.12
-
 // Package securelink tries to simplify the work need to mange and build certificates.
 //
 // This package can be used for PKI infrastructure, build a VPN like at the application level or
@@ -207,23 +205,12 @@ func (c *Certificate) GetKeyPEM() []byte {
 // tls.Config{Certificates: []tls.Certificate{ca.GetTLSCertificate()}}
 func (c *Certificate) GetTLSCertificate() tls.Certificate {
 	cert, _ := tls.X509KeyPair(c.GetCertPEM(), c.KeyPair.GetPrivatePEM())
-	// cert, _ := tls.X509KeyPair(c.GetCertPEM(), c.GetPrivateKeyPEM())
 	return cert
 }
 
 // GetCertPool is useful in tls.Config{RootCAs: ca.GetCertPool()}
 func (c *Certificate) GetCertPool() *x509.CertPool {
-	pool := x509.NewCertPool()
-
-	if !c.IsCA {
-		if c.CertPool != nil {
-			return c.CertPool
-		}
-		pool.AddCert(c.CACert)
-	}
-	pool.AddCert(c.Cert)
-
-	return pool
+	return c.CertPool
 }
 
 // Marshal convert the Certificate pointer into a slice of byte for

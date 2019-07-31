@@ -2,10 +2,18 @@ package securelink
 
 import (
 	"fmt"
+	"math/big"
 	"net/http"
 	"time"
 
 	"github.com/labstack/echo"
+)
+
+type (
+	ping struct {
+		Time   time.Time
+		Master *big.Int
+	}
 )
 
 func (n *Node) joinHandler(c echo.Context) error {
@@ -23,6 +31,7 @@ func (n *Node) joinHandler(c echo.Context) error {
 }
 
 func (n *Node) pingHandler(c echo.Context) error {
+
 	remoteMapUpdate := new(time.Time)
 	err := c.Bind(remoteMapUpdate)
 	if err != nil {

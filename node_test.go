@@ -41,6 +41,14 @@ func TestNode(t *testing.T) {
 		t.Error(err)
 		return
 	}
+
+	config.Priority = 0.5
+	err = n0.AddPeer(config)
+	if err == nil {
+		t.Errorf("expected an error but had no")
+		return
+	}
+
 	time.Sleep(time.Second * 5)
 	err = n0.AddPeer(n2.LocalConfig)
 	if err != nil {

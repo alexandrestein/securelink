@@ -159,6 +159,13 @@ func (n *Node) AddPeer(peer *Peer) error {
 	}
 
 	n.lock.Lock()
+	for _, existingPeer := range n.clusterMap.Peers {
+		if existingPeer.Priority == peer.Priority {
+			n.lock.Unlock()
+			return fmt.Errorf("the node %q is has the same priority %f", existingPeer.ID.String(), existingPeer.Priority)
+		}
+	}
+
 	n.clusterMap.Peers = append(n.clusterMap.Peers, peer)
 	asJON, err := json.Marshal(n.clusterMap)
 	n.clusterMap.Update = time.Now().Truncate(time.Millisecond)

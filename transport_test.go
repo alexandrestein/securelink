@@ -13,13 +13,19 @@ import (
 
 func initServers(ctx context.Context, n int) (ca *securelink.Certificate, servers []*securelink.Server) {
 	conf := securelink.NewDefaultCertificationConfig()
+	// conf.KeyType = securelink.KeyTypeEc
+	// conf.KeyLength = securelink.KeyLengthEc256
 	conf.CertTemplate = securelink.GetCertTemplate(nil, nil)
 	ca, _ = securelink.NewCA(conf, "ca")
 
 	servers = make([]*securelink.Server, n)
 	for i := range servers {
 		conf = securelink.NewDefaultCertificationConfig()
-		conf.CertTemplate = securelink.GetCertTemplate(nil, nil)
+		conf.CertTemplate = securelink.GetCertTemplate([]string{"*"}, nil)
+		// conf.KeyType = securelink.KeyTypeRSA
+		// conf.KeyLength = securelink.KeyLengthRsa2048
+		conf.KeyType = securelink.KeyTypeEc
+		conf.KeyLength = securelink.KeyLengthEc256
 		conf.IsCA = true
 		cert, _ := ca.NewCert(conf)
 		server, _ := securelink.NewServer(ctx, 3160+uint16(i), securelink.GetBaseTLSConfig(fmt.Sprint(i), cert), cert)

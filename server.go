@@ -3,7 +3,6 @@ package securelink
 import (
 	"context"
 	"crypto/tls"
-	"crypto/x509"
 	"encoding/hex"
 	"fmt"
 	"log"
@@ -213,7 +212,7 @@ func (s *Server) dial(addr string, timeout time.Duration) (quic.Session, error) 
 
 newConn:
 	tlsConfig := s.TLSConfig.Clone()
-	tlsConfig.InsecureSkipVerify = true
+	// tlsConfig.InsecureSkipVerify = true
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
@@ -230,10 +229,10 @@ newConn:
 		return nil, err
 	}
 
-	if !s.verifyRemoteCert(session.ConnectionState()) {
-		session.Close()
-		return nil, fmt.Errorf("bad certificate")
-	}
+	// if !s.verifyRemoteCert(session.ConnectionState()) {
+	// 	session.Close()
+	// 	return nil, fmt.Errorf("bad certificate")
+	// }
 
 	s.lock.Lock()
 	s.Sessions[addr] = session
@@ -255,21 +254,21 @@ newConn:
 	return session, nil
 }
 
-func (s *Server) verifyRemoteCert(connState tls.ConnectionState) bool {
-	verifyOptions := x509.VerifyOptions{
-		Roots: s.Certificate.GetCertPool(),
-	}
-	for _, cert := range connState.PeerCertificates {
-		_, err := cert.Verify(verifyOptions)
-		if err != nil {
-			continue
-		}
+// func (s *Server) verifyRemoteCert(connState tls.ConnectionState) bool {
+// 	verifyOptions := x509.VerifyOptions{
+// 		Roots: s.Certificate.GetCertPool(),
+// 	}
+// 	for _, cert := range connState.PeerCertificates {
+// 		_, err := cert.Verify(verifyOptions)
+// 		if err != nil {
+// 			continue
+// 		}
 
-		return true
-	}
+// 		return true
+// 	}
 
-	return false
-}
+// 	return false
+// }
 
 func (s *Server) NewListener(name string) (net.Listener, error) {
 	s.lock.Lock()

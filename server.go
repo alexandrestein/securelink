@@ -120,7 +120,7 @@ func (s *Server) handleConn(sess quic.Session) {
 		listener := s.Listeners[target]
 		s.lock.RUnlock()
 		if listener == nil {
-			s.Logger.Debugf("target listener %s is nil\n", target)
+			s.Logger.Debugf("target listener %s is nil", target)
 			sess.Close()
 			return
 		}

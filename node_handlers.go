@@ -37,7 +37,7 @@ func (n *Node) pingHandler(c echo.Context) error {
 	}
 
 	if pStruct.Time.After(n.clusterMap.Update) {
-		n.Server.Logger.Infof("*Node.pingHandler: the local node is late %s\n", n.LocalConfig.ID.String())
+		n.Server.Logger.Infof("*Node.pingHandler: the local node is late %s", n.LocalConfig.ID.String())
 		go n.getUpdate(pStruct.Master)
 	}
 

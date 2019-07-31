@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/alexandrestein/securelink"
 )
 
@@ -22,13 +24,12 @@ func initServers(ctx context.Context, n int) (ca *securelink.Certificate, server
 	for i := range servers {
 		conf = securelink.NewDefaultCertificationConfig()
 		conf.CertTemplate = securelink.GetCertTemplate([]string{"*"}, nil)
-		// conf.KeyType = securelink.KeyTypeRSA
-		// conf.KeyLength = securelink.KeyLengthRsa2048
 		conf.KeyType = securelink.KeyTypeEc
 		conf.KeyLength = securelink.KeyLengthEc256
 		conf.IsCA = true
 		cert, _ := ca.NewCert(conf)
 		server, _ := securelink.NewServer(ctx, 3160+uint16(i), securelink.GetBaseTLSConfig(fmt.Sprint(i), cert), cert)
+		server.Logger.SetLevel(logrus.TraceLevel)
 
 		servers[i] = server
 	}

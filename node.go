@@ -47,14 +47,14 @@ type (
 )
 
 func NewNode(s *Server, nodeConf *Peer) (*Node, error) {
-	// if !s.Certificate.IsCA {
-	// 	return nil, fmt.Errorf("the server must have a CA certificate")
-	// }
-
 	config := new(Peer)
 	*config = *nodeConf
 	if config == nil {
 		return nil, fmt.Errorf("config can't be nil")
+	}
+
+	if config.Priority > 1 || config.Priority < 0 {
+		return nil, fmt.Errorf("config priority must be between 0 and 1")
 	}
 
 	config.ID = s.Certificate.ID()
@@ -166,6 +166,10 @@ func (n *Node) AddPeer(peer *Peer) error {
 		return fmt.Errorf("the node %q is not master. master is %q", n.LocalConfig.ID.String(), master.ID.String())
 	}
 
+	if n.LocalConfig.Priority < peer.Priority {
+		return fmt.Errorf("the peer has a bigger priority %s:%f than the master %s:%f", peer.ID.String(), peer.Priority, n.LocalConfig.ID.String(), n.LocalConfig.Priority)
+	}
+
 	n.lock.Lock()
 	for _, existingPeer := range n.clusterMap.Peers {
 		if existingPeer.Priority == peer.Priority {
@@ -182,8 +186,9 @@ func (n *Node) AddPeer(peer *Peer) error {
 		return err
 	}
 
-	buff := bytes.NewBuffer(nil)
-	buff.Write(asJON)
+	n.Server.Logger.Infof("added peer %s at %s", peer.ID.String(), peer.Addr.String())
+
+	buff := bytes.NewBuffer(asJON)
 
 	cli := n.GetClient()
 	_, err = cli.Post(n.buildURL(peer, "/join"), "application/json", buff)
@@ -222,7 +227,9 @@ func (n *Node) pingPeers() {
 		}
 
 		buff := bytes.NewBuffer(asJOSN)
-		// buff.Write(asJOSN)
+
+		n.Server.Logger.Debugf("pinging %s at %s from %s at %s", peer.ID.String(), peer.Addr.String(), n.LocalConfig.ID.String(), n.LocalConfig.Addr.String())
+		n.Server.Logger.Tracef("pinging info from %s: %s", n.LocalConfig.ID.String(), string(asJOSN))
 
 		cli := n.GetClient()
 		resp, err := cli.Post(n.buildURL(peer, "/ping"), "application/json", buff)

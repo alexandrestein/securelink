@@ -28,7 +28,7 @@ type (
 
 		clusterMap *clusterMap
 
-		lock        *sync.Mutex
+		lock        *sync.RWMutex
 		LocalConfig *Peer
 	}
 
@@ -70,7 +70,7 @@ func NewNode(s *Server, nodeConf *Peer) (*Node, error) {
 
 		EchoServer: NewHTTPEchoServer(ln),
 
-		lock: &sync.Mutex{},
+		lock: &sync.RWMutex{},
 
 		clusterMap: &clusterMap{
 			Peers:  make([]*Peer, 0),
@@ -95,8 +95,13 @@ func NewNode(s *Server, nodeConf *Peer) (*Node, error) {
 	return n, nil
 }
 
-func (n *Node) getUpdate() {
-	masterPeer := n.getMaster()
+func (n *Node) getUpdate(masterID *big.Int) {
+	var masterPeer *Peer
+	if masterID == nil {
+		masterPeer = n.getMaster()
+	} else {
+		masterPeer = n.getPeer(masterID)
+	}
 
 	cli := n.GetClient()
 	resp, err := cli.Get(n.buildURL(masterPeer, "/update"))
@@ -125,8 +130,8 @@ func (n *Node) getUpdate() {
 }
 
 func (n *Node) getMaster() *Peer {
-	n.lock.Lock()
-	defer n.lock.Unlock()
+	n.lock.RLock()
+	defer n.lock.RUnlock()
 
 	if len(n.clusterMap.Peers) == 0 {
 		return n.LocalConfig
@@ -143,6 +148,9 @@ func (n *Node) getMaster() *Peer {
 }
 
 func (n *Node) getPeer(id *big.Int) *Peer {
+	n.lock.RLock()
+	defer n.lock.RUnlock()
+
 	for _, peer := range n.clusterMap.Peers {
 		if peer.ID.Uint64() == id.Uint64() {
 			return peer
@@ -194,10 +202,16 @@ func (n *Node) buildURL(peer *Peer, path string) string {
 }
 
 func (n *Node) pingPeers() {
-	n.lock.Lock()
+	master := n.getMaster()
+
+	n.lock.RLock()
 
 	mp := n.clusterMap
-	asJOSN, err := json.Marshal(mp.Update)
+	pStruct := &ping{
+		Time:   mp.Update,
+		Master: master.ID,
+	}
+	asJOSN, err := json.Marshal(pStruct)
 	if err != nil {
 		return
 	}
@@ -207,8 +221,8 @@ func (n *Node) pingPeers() {
 			continue
 		}
 
-		buff := bytes.NewBuffer(nil)
-		buff.Write(asJOSN)
+		buff := bytes.NewBuffer(asJOSN)
+		// buff.Write(asJOSN)
 
 		cli := n.GetClient()
 		resp, err := cli.Post(n.buildURL(peer, "/ping"), "application/json", buff)
@@ -223,20 +237,20 @@ func (n *Node) pingPeers() {
 			continue
 		}
 
-		t := time.Time{}
-		jsonErr := json.Unmarshal(body, &t)
+		prStruct := new(ping)
+		jsonErr := json.Unmarshal(body, prStruct)
 		if jsonErr != nil {
 			continue
 		}
 
 		// Other node has an other config.
 		// A call is made to get the new status from master
-		if t.After(mp.Update) {
+		if prStruct.Time.After(mp.Update) {
 			fmt.Println("remote node " + peer.ID.String() + " is in the future check")
-			go n.getUpdate()
+			go n.getUpdate(prStruct.Master)
 		}
 	}
-	n.lock.Unlock()
+	n.lock.RUnlock()
 }
 func (n *Node) checkPeers() {
 	ticker := time.NewTicker(time.Second * 2)

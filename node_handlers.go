@@ -31,19 +31,23 @@ func (n *Node) joinHandler(c echo.Context) error {
 }
 
 func (n *Node) pingHandler(c echo.Context) error {
-
-	remoteMapUpdate := new(time.Time)
-	err := c.Bind(remoteMapUpdate)
+	pStruct := new(ping)
+	err := c.Bind(pStruct)
 	if err != nil {
 		return err
 	}
 
-	if remoteMapUpdate.After(n.clusterMap.Update) {
+	if pStruct.Time.After(n.clusterMap.Update) {
 		fmt.Println("the local node is late", n.LocalConfig.ID)
-		go n.getUpdate()
+		go n.getUpdate(pStruct.Master)
 	}
 
-	return c.JSON(http.StatusOK, n.clusterMap.Update)
+	prStruct := &ping{
+		Time:   n.clusterMap.Update,
+		Master: n.getMaster().ID,
+	}
+
+	return c.JSON(http.StatusOK, prStruct)
 }
 
 func (n *Node) updateHandler(c echo.Context) error {

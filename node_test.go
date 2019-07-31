@@ -2,7 +2,6 @@ package securelink_test
 
 import (
 	"context"
-	"fmt"
 	"testing"
 	"time"
 
@@ -32,7 +31,9 @@ func TestNode(t *testing.T) {
 	config.Priority = 0.2
 	n2, _ := securelink.NewNode(s2, config)
 
-	fmt.Println("master is " + n0.Server.Certificate.ID().String())
+	if testing.Verbose() {
+		t.Log("master is " + n0.Server.Certificate.ID().String())
+	}
 
 	time.Sleep(time.Second)
 
@@ -42,6 +43,7 @@ func TestNode(t *testing.T) {
 		return
 	}
 
+	// Add a peer which must get an error
 	config.Priority = 0.5
 	err = n0.AddPeer(config)
 	if err == nil {

@@ -1,6 +1,7 @@
 package securelink
 
 import (
+	"fmt"
 	"math/big"
 	"net/http"
 	"time"
@@ -30,6 +31,9 @@ func (n *Node) joinHandler(c echo.Context) error {
 }
 
 func (n *Node) pingHandler(c echo.Context) error {
+	n.lock.RLock()
+	defer n.lock.RUnlock()
+
 	pStruct := new(ping)
 	err := c.Bind(pStruct)
 	if err != nil {
@@ -38,6 +42,7 @@ func (n *Node) pingHandler(c echo.Context) error {
 
 	if pStruct.Time.After(n.clusterMap.Update) {
 		n.Server.Logger.Infof("*Node.pingHandler: the local node is late %s", n.LocalConfig.ID.String())
+		fmt.Println("sss", pStruct)
 		go n.getUpdate(pStruct.Master)
 	}
 
@@ -50,6 +55,8 @@ func (n *Node) pingHandler(c echo.Context) error {
 }
 
 func (n *Node) updateHandler(c echo.Context) error {
+	n.lock.RLock()
+	defer n.lock.RUnlock()
 	return c.JSON(http.StatusOK, n.clusterMap)
 }
 
@@ -61,5 +68,7 @@ func (n *Node) failureHandler(c echo.Context) error {
 		return err
 	}
 
+	n.lock.RLock()
+	defer n.lock.RUnlock()
 	return c.JSON(http.StatusOK, n.clusterMap)
 }

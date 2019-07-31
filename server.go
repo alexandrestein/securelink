@@ -158,16 +158,14 @@ func (s *Server) getTarget(str quic.Stream) (string, error) {
 // Close implements the net.Listener interface
 func (s *Server) Close() error {
 	s.lock.RLock()
-	listeners := map[string]*localListener{}
-	sessions := map[string]quic.Session{}
-	listeners, sessions = s.Listeners, s.Sessions
-	s.lock.RUnlock()
-	for _, listener := range listeners {
-		listener.Close()
+	defer s.lock.RUnlock()
+	for _, listener := range s.Listeners {
+		go listener.Close()
 	}
-	for _, session := range sessions {
-		session.Close()
+	for _, session := range s.Sessions {
+		go session.Close()
 	}
+
 	return s.Listener.Close()
 }
 

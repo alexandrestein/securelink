@@ -9,6 +9,7 @@ import (
 	"math/big"
 	"net"
 	"net/http"
+	"runtime/debug"
 	"sync"
 	"time"
 
@@ -104,6 +105,8 @@ func (n *Node) getUpdate(masterID *big.Int) {
 	} else {
 		masterPeer = n.getPeer(masterID)
 	}
+
+	fmt.Println("masterID", masterID, masterPeer)
 
 	cli := n.GetClient()
 	resp, err := cli.Get(n.buildURL(masterPeer, "/update"))
@@ -204,6 +207,10 @@ func (n *Node) AddPeer(peer *Peer) error {
 }
 
 func (n *Node) buildURL(peer *Peer, path string) string {
+	if peer == nil {
+		debug.PrintStack()
+	}
+
 	ret := fmt.Sprintf("http://%s%s", peer.Addr.String(), path)
 	return ret
 }
@@ -236,21 +243,23 @@ func (n *Node) pingPeers() {
 		cli := n.GetClient()
 		resp, err := cli.Post(n.buildURL(peer, "/ping"), "application/json", buff)
 		if err != nil {
-			n.Server.Logger.Debugln("*Node.pingPeers post: ", err)
-			peer.Priority = 0
+			n.Server.Logger.Errorln("*Node.pingPeers post: ", err)
+			// peer.Priority = 0
 			continue
 		}
 
+		n.Server.Logger.Errorln("Failled node not handled")
+
 		body, readErr := ioutil.ReadAll(resp.Body)
 		if readErr != nil {
-			n.Server.Logger.Debugln("*Node.pingPeers read: ", readErr)
+			n.Server.Logger.Errorln("*Node.pingPeers read: ", readErr)
 			continue
 		}
 
 		prStruct := new(ping)
 		jsonErr := json.Unmarshal(body, prStruct)
 		if jsonErr != nil {
-			n.Server.Logger.Debugln("*Node.pingPeers unmarshal: ", readErr)
+			n.Server.Logger.Errorln("*Node.pingPeers unmarshal: ", readErr)
 			continue
 		}
 

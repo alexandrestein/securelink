@@ -1,7 +1,6 @@
 package securelink
 
 import (
-	"fmt"
 	"math/big"
 	"net/http"
 	"time"
@@ -38,7 +37,7 @@ func (n *Node) pingHandler(c echo.Context) error {
 	}
 
 	if pStruct.Time.After(n.clusterMap.Update) {
-		fmt.Println("the local node is late", n.LocalConfig.ID)
+		n.Server.Logger.Infof("*Node.pingHandler: the local node is late %s\n", n.LocalConfig.ID.String())
 		go n.getUpdate(pStruct.Master)
 	}
 

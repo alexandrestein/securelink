@@ -227,19 +227,21 @@ func (n *Node) pingPeers() {
 		cli := n.GetClient()
 		resp, err := cli.Post(n.buildURL(peer, "/ping"), "application/json", buff)
 		if err != nil {
-			fmt.Println("err", err)
+			n.Server.Logger.Debugln("*Node.pingPeers post: ", err)
 			peer.Priority = 0
 			continue
 		}
 
 		body, readErr := ioutil.ReadAll(resp.Body)
 		if readErr != nil {
+			n.Server.Logger.Debugln("*Node.pingPeers read: ", readErr)
 			continue
 		}
 
 		prStruct := new(ping)
 		jsonErr := json.Unmarshal(body, prStruct)
 		if jsonErr != nil {
+			n.Server.Logger.Debugln("*Node.pingPeers unmarshal: ", readErr)
 			continue
 		}
 

@@ -5,15 +5,15 @@ import (
 	"crypto/tls"
 	"encoding/hex"
 	"fmt"
-	"log"
 	"net"
-	"os"
 	"sync"
 	"time"
 
 	"github.com/labstack/echo"
 	"github.com/lucas-clemente/quic-go"
 	"golang.org/x/crypto/blake2b"
+
+	"github.com/sirupsen/logrus"
 
 	"github.com/alexandrestein/securelink/common"
 )
@@ -32,7 +32,7 @@ type (
 		TLSConfig   *tls.Config
 		Listeners   map[string]*localListener
 
-		Logger *log.Logger
+		Logger *logrus.Logger
 
 		ctx context.Context
 
@@ -52,7 +52,8 @@ func NewServer(ctx context.Context, port uint16, tlsConfig *tls.Config, cert *Ce
 		return nil, err
 	}
 
-	logger := log.New(os.Stdout, fmt.Sprintf("securelink-server :%d", port), log.LstdFlags)
+	logger := logrus.StandardLogger()
+	logger.SetFormatter(&logrus.TextFormatter{})
 
 	quicConfig := &quic.Config{
 		KeepAlive: true,
@@ -86,6 +87,7 @@ func NewServer(ctx context.Context, port uint16, tlsConfig *tls.Config, cert *Ce
 			sess, err := s.Listener.Accept()
 			if err != nil {
 				if err.Error() == "server closed" {
+					s.Logger.Infoln("quic listener is closed")
 					return
 				}
 				continue
@@ -101,7 +103,7 @@ func (s *Server) handleConn(sess quic.Session) {
 	for {
 		str, err := sess.AcceptStream()
 		if err != nil {
-			// fmt.Println("Accepting stream failed:", err)
+			s.Logger.Debugln("Accepting stream failed:", err)
 			sess.Close()
 			return
 		}
@@ -109,7 +111,7 @@ func (s *Server) handleConn(sess quic.Session) {
 		var target string
 		target, err = s.getTarget(str)
 		if err != nil {
-			// fmt.Println("Accepting getting target:", err)
+			s.Logger.Debugln("Accepting getting target:", err)
 			sess.Close()
 			return
 		}
@@ -118,6 +120,7 @@ func (s *Server) handleConn(sess quic.Session) {
 		listener := s.Listeners[target]
 		s.lock.RUnlock()
 		if listener == nil {
+			s.Logger.Debugf("target listener %s is nil\n", target)
 			sess.Close()
 			return
 		}

@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net"
+	"os"
 	"sync"
 	"time"
 
@@ -52,8 +53,13 @@ func NewServer(ctx context.Context, port uint16, tlsConfig *tls.Config, cert *Ce
 		return nil, err
 	}
 
-	logger := logrus.StandardLogger()
-	logger.SetFormatter(&logrus.TextFormatter{})
+	logger := &logrus.Logger{
+		Out: os.Stderr,
+		Formatter: &logrus.TextFormatter{
+			FullTimestamp: true,
+		},
+		Level: logrus.InfoLevel,
+	}
 
 	quicConfig := &quic.Config{
 		KeepAlive: true,
@@ -105,7 +111,9 @@ func (s *Server) handleConn(sess quic.Session) {
 	for {
 		str, err := sess.AcceptStream()
 		if err != nil {
-			s.Logger.Debugln("Accepting stream failed:", err)
+			if err.Error() != "NO_ERROR" {
+				s.Logger.Debugln("Accepting stream failed:", err)
+			}
 			sess.Close()
 			return
 		}

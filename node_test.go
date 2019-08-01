@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/alexandrestein/securelink"
 	"github.com/alexandrestein/securelink/common"
 )
@@ -70,18 +72,23 @@ func TestNodeFaillure5To3Nodes(t *testing.T) {
 
 	s0 := servers[0]
 	defer s0.Close()
+	s0.Logger.SetLevel(logrus.ErrorLevel)
 
 	s1 := servers[1]
 	defer s1.Close()
+	s1.Logger.SetLevel(logrus.ErrorLevel)
 
 	s2 := servers[2]
 	defer s2.Close()
+	s2.Logger.SetLevel(logrus.ErrorLevel)
 
 	s3 := servers[3]
 	defer s3.Close()
+	s3.Logger.SetLevel(logrus.ErrorLevel)
 
 	s4 := servers[4]
 	defer s4.Close()
+	s4.Logger.SetLevel(logrus.TraceLevel)
 
 	config := &securelink.Peer{}
 
@@ -103,11 +110,25 @@ func TestNodeFaillure5To3Nodes(t *testing.T) {
 	time.Sleep(time.Second)
 
 	n0.AddPeer(n1.LocalConfig)
+	// time.Sleep(time.Second)
 	n0.AddPeer(n2.LocalConfig)
+	// time.Sleep(time.Second)
 	n0.AddPeer(n3.LocalConfig)
+	// time.Sleep(time.Second)
 	n0.AddPeer(n4.LocalConfig)
+	// time.Sleep(time.Second)
 
-	time.Sleep(time.Second)
+	time.Sleep(time.Second * 3)
+
+	// n3.EchoServer.Close()
+	s3.Close()
+
+	time.Sleep(time.Second * 15)
+
+	// n0.EchoServer.Close()
+	s0.Close()
+
+	time.Sleep(time.Second * 30)
 }
 
 func TestNodeToken(t *testing.T) {

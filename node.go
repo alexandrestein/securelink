@@ -9,7 +9,6 @@ import (
 	"math/big"
 	"net"
 	"net/http"
-	"runtime/debug"
 	"sync"
 	"time"
 
@@ -106,63 +105,35 @@ func (n *Node) getUpdate(masterID *big.Int) {
 		masterPeer = n.getPeer(masterID)
 	}
 
-	fmt.Println("masterID", masterID, masterPeer)
-
 	cli := n.GetClient()
 	resp, err := cli.Get(n.buildURL(masterPeer, "/update"))
 	if err != nil {
-		fmt.Println("can't get update", err)
+		n.Server.Logger.Warningf("can't get update: %s", err.Error())
 		return
 	}
 
 	var content []byte
 	content, err = ioutil.ReadAll(resp.Body)
 	if err != nil {
-		fmt.Println("can't read update", err)
+		n.Server.Logger.Warningf("can't read update: %s", err.Error())
 		return
 	}
 
 	mp := new(clusterMap)
 	err = json.Unmarshal(content, mp)
 	if err != nil {
-		fmt.Println("can't unmarshal update", err)
+		n.Server.Logger.Warningf("can't unmarshal update: %s", err.Error())
 		return
 	}
 
 	n.lock.Lock()
+	sortPeersBy(sortPeersByPriority).Sort(mp.Peers)
 	n.clusterMap = mp
 	n.lock.Unlock()
-}
 
-func (n *Node) getMaster() *Peer {
-	n.lock.RLock()
-	defer n.lock.RUnlock()
-
-	if len(n.clusterMap.Peers) == 0 {
-		return n.LocalConfig
-	}
-
-	master := n.clusterMap.Peers[0]
-	for _, peer := range n.clusterMap.Peers {
-		if master.Priority < peer.Priority {
-			master = peer
-		}
-	}
-
-	return master
-}
-
-func (n *Node) getPeer(id *big.Int) *Peer {
-	n.lock.RLock()
-	defer n.lock.RUnlock()
-
-	for _, peer := range n.clusterMap.Peers {
-		if peer.ID.Uint64() == id.Uint64() {
-			return peer
-		}
-	}
-
-	return nil
+	// niceMap, _ := json.MarshalIndent(mp, "", "	")
+	// n.Server.Logger.Infof("cluster map updated: %s", string(niceMap))
+	n.Server.Logger.Infof("cluster map updated to: %s", mp.Update.String())
 }
 
 // AddPeer can only be run by the master
@@ -183,7 +154,10 @@ func (n *Node) AddPeer(peer *Peer) error {
 		}
 	}
 
+	// Append new element and reorder the list accordingly
 	n.clusterMap.Peers = append(n.clusterMap.Peers, peer)
+	sortPeersBy(sortPeersByPriority).Sort(n.clusterMap.Peers)
+
 	asJON, err := json.Marshal(n.clusterMap)
 	n.clusterMap.Update = time.Now().Truncate(time.Millisecond)
 	n.lock.Unlock()
@@ -206,11 +180,113 @@ func (n *Node) AddPeer(peer *Peer) error {
 	return nil
 }
 
-func (n *Node) buildURL(peer *Peer, path string) string {
-	if peer == nil {
-		debug.PrintStack()
+// RemovePeer removes the given peer from the cluster
+func (n *Node) RemovePeer(peerID *big.Int) error {
+	if !n.IsMaster() {
+		return fmt.Errorf("not master")
 	}
 
+	// Lock the node config
+	n.lock.Lock()
+
+	// Found the peer from the cluster list
+	for i, existingPeer := range n.clusterMap.Peers {
+		if existingPeer.ID.Uint64() == peerID.Uint64() {
+			// Remove the failed peer from the list
+			copy(n.clusterMap.Peers[i:], n.clusterMap.Peers[i+1:])
+			n.clusterMap.Peers[len(n.clusterMap.Peers)-1] = nil
+			n.clusterMap.Peers = n.clusterMap.Peers[:len(n.clusterMap.Peers)-1]
+
+			// Stop the list evaluation
+			break
+		}
+	}
+
+	// Set the new slucter map version
+	n.clusterMap.Update = time.Now().Truncate(time.Millisecond)
+
+	// Lock unlock the node configuration
+	n.lock.Unlock()
+
+	// breadcast the new status
+	go n.pingPeers()
+
+	return nil
+}
+
+// TogglePeer change the sign of the priority to desable or enable the peer
+func (n *Node) TogglePeer(peerID *big.Int) error {
+	if !n.IsMaster() {
+		return fmt.Errorf("not master")
+	}
+
+	// Lock the node config
+	n.lock.Lock()
+
+	// Found the peer from the cluster list
+	for _, existingPeer := range n.clusterMap.Peers {
+		if existingPeer.ID.Uint64() == peerID.Uint64() {
+			// change the sign
+			existingPeer.Priority = -existingPeer.Priority
+
+			// Stop the list evaluation
+			break
+		}
+	}
+
+	// Set the new cluster map version
+	n.clusterMap.Update = time.Now().Truncate(time.Millisecond)
+
+	// Reorder the peers list
+	sortPeersBy(sortPeersByPriority).Sort(n.clusterMap.Peers)
+
+	// Lock unlock the node configuration
+	n.lock.Unlock()
+
+	// breadcast the new status
+	go n.pingPeers()
+
+	return nil
+}
+
+func (n *Node) ChangePeerPriority(peerID *big.Int, newPriority float32) error {
+	if !n.IsMaster() {
+		return fmt.Errorf("not master")
+	}
+
+	// Lock the node config
+	n.lock.Lock()
+
+	// Found the peer from the cluster list
+	for _, existingPeer := range n.clusterMap.Peers {
+		if existingPeer.ID.Uint64() == peerID.Uint64() {
+			// change the sign
+			existingPeer.Priority = newPriority
+
+			// Stop the list evaluation
+			break
+		}
+	}
+
+	// Set the new slucter map version
+	n.clusterMap.Update = time.Now().Truncate(time.Millisecond)
+
+	// Reorder the peers list
+	sortPeersBy(sortPeersByPriority).Sort(n.clusterMap.Peers)
+
+	// Lock unlock the node configuration
+	n.lock.Unlock()
+
+	// breadcast the new status
+	go n.pingPeers()
+
+	return nil
+}
+
+func (n *Node) buildURL(peer *Peer, path string) string {
+	if peer == nil {
+		return ""
+	}
 	ret := fmt.Sprintf("http://%s%s", peer.Addr.String(), path)
 	return ret
 }
@@ -219,6 +295,7 @@ func (n *Node) pingPeers() {
 	master := n.getMaster()
 
 	n.lock.RLock()
+	defer n.lock.RUnlock()
 
 	mp := n.clusterMap
 	pStruct := &ping{
@@ -230,48 +307,93 @@ func (n *Node) pingPeers() {
 		return
 	}
 
+	cli := n.GetClient()
+	cli.Timeout = time.Millisecond * 500
+
+	failureFn := func(failedPeer *Peer) {
+		masterPeer := n.getMaster()
+
+		peerAsJSON, _ := json.Marshal(failedPeer)
+		buff := bytes.NewBuffer(peerAsJSON)
+
+		failOver := false
+		if masterPeer.ID.Uint64() == failedPeer.ID.Uint64() {
+			n.Server.Logger.Warningf("master %s-%s is down", failedPeer.ID.String(), failedPeer.Addr.String())
+
+			masterPeer = n.getMasterFailover()
+			failOver = true
+		} else {
+			n.Server.Logger.Infof("node %s-%s is down", failedPeer.ID.String(), failedPeer.Addr.String())
+		}
+
+		_, err := cli.Post(n.buildURL(masterPeer, "/failure"), "application/json", buff)
+		if err != nil {
+			master := "master"
+			if failOver {
+				master = "failover node"
+			}
+			n.Server.Logger.Warningf("from %s-%s %s is unreachable: %s", n.LocalConfig.ID.String(), n.LocalConfig.Addr.String(), master, err.Error())
+			return
+		}
+	}
+
 	for _, peer := range n.clusterMap.Peers {
+		// If local
 		if peer.ID.Uint64() == n.LocalConfig.ID.Uint64() {
 			continue
 		}
 
-		buff := bytes.NewBuffer(asJOSN)
-
-		n.Server.Logger.Debugf("pinging %s at %s from %s at %s", peer.ID.String(), peer.Addr.String(), n.LocalConfig.ID.String(), n.LocalConfig.Addr.String())
-		n.Server.Logger.Tracef("pinging info from %s: %s", n.LocalConfig.ID.String(), string(asJOSN))
-
-		cli := n.GetClient()
-		resp, err := cli.Post(n.buildURL(peer, "/ping"), "application/json", buff)
-		if err != nil {
-			n.Server.Logger.Errorln("*Node.pingPeers post: ", err)
-			// peer.Priority = 0
+		// If disable
+		if peer.Priority <= 0 {
 			continue
 		}
 
-		n.Server.Logger.Errorln("Failled node not handled")
+		// Make a copy of the peer because in case of failure the copy is used to
+		// prevent race on it
+		peerCopy := new(Peer)
+		*peerCopy = *peer
+
+		buff := bytes.NewBuffer(asJOSN)
+
+		n.Server.Logger.Debugf("pinging %s:%s", peer.ID.String(), peer.Addr.String())
+		n.Server.Logger.Tracef("pinging from %s:%s: %s", n.LocalConfig.ID.String(), n.LocalConfig.Addr.String(), string(asJOSN))
+
+		resp, err := cli.Post(n.buildURL(peer, "/ping"), "application/json", buff)
+		if err != nil {
+			n.Server.Logger.Errorf("*Node.pingPeers %s-%s: %s", n.LocalConfig.ID.String(), n.LocalConfig.Addr.String(), err.Error())
+
+			go failureFn(peerCopy)
+			continue
+		}
 
 		body, readErr := ioutil.ReadAll(resp.Body)
 		if readErr != nil {
-			n.Server.Logger.Errorln("*Node.pingPeers read: ", readErr)
+			n.Server.Logger.Errorf("*Node.pingPeers node %s-%s read: %s", n.LocalConfig.ID.String(), n.LocalConfig.Addr.String(), readErr.Error())
+			go failureFn(peerCopy)
 			continue
 		}
 
 		prStruct := new(ping)
 		jsonErr := json.Unmarshal(body, prStruct)
 		if jsonErr != nil {
-			n.Server.Logger.Errorln("*Node.pingPeers unmarshal: ", readErr)
+			n.Server.Logger.Errorf("*Node.pingPeers node %s-%s unmarshal: %s", n.LocalConfig.ID.String(), n.LocalConfig.Addr.String(), readErr.Error())
+			go failureFn(peerCopy)
 			continue
 		}
 
 		// Other node has an other config.
 		// A call is made to get the new status from master
 		if prStruct.Time.After(mp.Update) {
-			fmt.Println("remote node " + peer.ID.String() + " is in the future check")
+			n.Server.Logger.Infof("remote node %s:%s is in the future check", peer.ID.String(), peer.Addr.String())
 			go n.getUpdate(prStruct.Master)
 		}
 	}
-	n.lock.RUnlock()
 }
+
+func (n *Node) Fail() {
+
+}
+
 func (n *Node) checkPeers() {
 	ticker := time.NewTicker(time.Second * 2)
 	for {
@@ -279,6 +401,8 @@ func (n *Node) checkPeers() {
 		case <-ticker.C:
 			go n.pingPeers()
 		case <-n.Server.Ctx().Done():
+			n.Server.Logger.Infof("the server context is done: %s", n.Server.ctx.Err().Error())
+			n.EchoServer.Close()
 			return
 		}
 	}
@@ -302,4 +426,12 @@ func (n *Node) GetClient() *http.Client {
 	}
 
 	return cli
+}
+
+func (n *Node) IsMaster() bool {
+	master := n.getMaster()
+	if master.ID.Uint64() == n.LocalConfig.ID.Uint64() {
+		return true
+	}
+	return false
 }

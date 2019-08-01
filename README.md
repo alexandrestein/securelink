@@ -14,5 +14,3 @@ This is the purpose of the package.
 ## status
 
 The project is not ready and is under development.
-
-Now the package use TLS1.3 but in future the plan is to move to QUIC protocol.

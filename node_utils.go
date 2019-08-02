@@ -3,7 +3,6 @@ package securelink
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"math/big"
 	"net/http"
@@ -23,7 +22,6 @@ func (n *Node) getMaster() *Peer {
 }
 
 func (n *Node) getMasterFailover() *Peer {
-	master := n.getMaster()
 	n.lock.RLock()
 	defer n.lock.RUnlock()
 
@@ -31,7 +29,6 @@ func (n *Node) getMasterFailover() *Peer {
 		return n.LocalConfig
 	}
 
-	fmt.Println("getMasterFailover", master, n.clusterMap.Peers[1])
 	return n.clusterMap.Peers[1]
 }
 
@@ -71,13 +68,13 @@ func (n *Node) checkPeerAlive(peer *Peer) bool {
 	alive := false
 	resp, err := cli.Post(n.buildURL(peer, "/ping"), "application/json", buff)
 	if err != nil {
-		n.Server.Logger.Infof("*Node.failureHandler node %s-%s did not reply to ping: %s", peer.ID.String(), peer.Addr.String(), err.Error())
+		n.Server.Logger.Infof("*Node.checkPeerAlive node %s-%s did not reply to ping: %s", peer.ID.String(), peer.Addr.String(), err.Error())
 		return false
 	}
 
 	if resp.StatusCode != http.StatusOK {
 		msg, _ := ioutil.ReadAll(resp.Body)
-		n.Server.Logger.Infof("*Node.failureHandler node %s-%s replied but the response is not OK: %s", peer.ID.String(), peer.Addr.String(), string(msg))
+		n.Server.Logger.Infof("*Node.checkPeerAlive node %s-%s replied but the response is not OK: %s", peer.ID.String(), peer.Addr.String(), string(msg))
 	} else {
 		alive = true
 	}

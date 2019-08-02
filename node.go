@@ -127,9 +127,14 @@ func (n *Node) getUpdate(masterID *big.Int) {
 	}
 
 	n.lock.Lock()
+	defer n.lock.Unlock()
+
+	if n.clusterMap.Update.Equal(mp.Update) {
+		return
+	}
+
 	sortPeersBy(sortPeersByPriority).Sort(mp.Peers)
 	n.clusterMap = mp
-	n.lock.Unlock()
 
 	// niceMap, _ := json.MarshalIndent(mp, "", "	")
 	// n.Server.Logger.Infof("cluster map updated: %s", string(niceMap))
@@ -216,16 +221,28 @@ func (n *Node) RemovePeer(peerID *big.Int) error {
 
 // TogglePeer change the sign of the priority to desable or enable the peer
 func (n *Node) TogglePeer(peerID *big.Int) error {
-	if !n.IsMaster() {
-		return fmt.Errorf("not master")
+	return n.togglePeer(peerID, false, false)
+}
+
+func (n *Node) togglePeer(peerID *big.Int, skipMaster, forceDisable bool) error {
+	if !skipMaster {
+		if !n.IsMaster() {
+			return fmt.Errorf("not master")
+		}
 	}
 
 	// Lock the node config
 	n.lock.Lock()
+	defer n.lock.Unlock()
 
 	// Found the peer from the cluster list
 	for _, existingPeer := range n.clusterMap.Peers {
 		if existingPeer.ID.Uint64() == peerID.Uint64() {
+			if forceDisable {
+				if existingPeer.Priority < 0 {
+					return fmt.Errorf("already down")
+				}
+			}
 			// change the sign
 			existingPeer.Priority = -existingPeer.Priority
 
@@ -239,9 +256,6 @@ func (n *Node) TogglePeer(peerID *big.Int) error {
 
 	// Reorder the peers list
 	sortPeersBy(sortPeersByPriority).Sort(n.clusterMap.Peers)
-
-	// Lock unlock the node configuration
-	n.lock.Unlock()
 
 	// breadcast the new status
 	go n.pingPeers()
@@ -326,14 +340,21 @@ func (n *Node) pingPeers() {
 			n.Server.Logger.Infof("node %s-%s is down", failedPeer.ID.String(), failedPeer.Addr.String())
 		}
 
-		_, err := cli.Post(n.buildURL(masterPeer, "/failure"), "application/json", buff)
-		if err != nil {
-			master := "master"
-			if failOver {
-				master = "failover node"
-			}
-			n.Server.Logger.Warningf("from %s-%s %s is unreachable: %s", n.LocalConfig.ID.String(), n.LocalConfig.Addr.String(), master, err.Error())
-			return
+		// If local is master
+		if n.IsMaster() {
+			n.togglePeer(failedPeer.ID, true, true)
+		} else {
+			go func() {
+				_, err := cli.Post(n.buildURL(masterPeer, "/failure"), "application/json", buff)
+				if err != nil {
+					masterStr := "master"
+					if failOver {
+						masterStr = "failover node"
+					}
+					n.Server.Logger.Warningf("from %s-%s %s is unreachable: %s", n.LocalConfig.ID.String(), n.LocalConfig.Addr.String(), masterStr, err.Error())
+					return
+				}
+			}()
 		}
 	}
 
@@ -344,8 +365,8 @@ func (n *Node) pingPeers() {
 		}
 
 		// If disable
-		if peer.Priority <= 0 {
-			continue
+		if peer.Priority < 0 {
+			return
 		}
 
 		// Make a copy of the peer because in case of failure the copy is used to
@@ -390,10 +411,6 @@ func (n *Node) pingPeers() {
 	}
 }
 
-func (n *Node) Fail() {
-
-}
-
 func (n *Node) checkPeers() {
 	ticker := time.NewTicker(time.Second * 2)
 	for {
@@ -418,7 +435,7 @@ func (n *Node) GetClient() *http.Client {
 		MaxIdleConns:          100,
 		IdleConnTimeout:       90 * time.Second,
 		TLSHandshakeTimeout:   10 * time.Second,
-		ExpectContinueTimeout: 1 * time.Second,
+		ExpectContinueTimeout: 2 * time.Second,
 	}
 
 	cli := &http.Client{

@@ -62,10 +62,6 @@ func (n *Node) updateHandler(c echo.Context) error {
 
 func (n *Node) failureHandler(c echo.Context) error {
 	master := n.getMaster()
-	if master.ID.Uint64() != n.LocalConfig.ID.Uint64() {
-		n.Server.Logger.Errorf("got down signal but local node is note master")
-		return c.String(http.StatusBadGateway, "not master")
-	}
 
 	failedNode := new(Peer)
 	err := c.Bind(failedNode)
@@ -75,16 +71,42 @@ func (n *Node) failureHandler(c echo.Context) error {
 
 	n.Server.Logger.Infof("got signal %s:%s is down", failedNode.ID.String(), failedNode.Addr.String())
 
+	failover := false
+
+	// Check if the local node is master
+	if master.ID.Uint64() != n.LocalConfig.ID.Uint64() {
+		// It is not master but the pointing failed node is the master
+		if master.ID.Uint64() == failedNode.ID.Uint64() {
+			// Get the master failover
+			masterFailover := n.getMasterFailover()
+			// Check if local node is the failover node
+			if masterFailover.ID.Uint64() == n.LocalConfig.ID.Uint64() {
+				failover = true
+				// master = masterFailover
+				goto doIt
+			}
+		}
+		// local node is not master and the pointed node is not master
+		n.Server.Logger.Errorf("got down signal but local node is note master")
+		return c.String(http.StatusBadGateway, "not master")
+	}
+
+doIt:
 	failed := !n.checkPeerAlive(failedNode)
 
 	if failed {
-		err = n.TogglePeer(failedNode.ID)
+
+		err = n.togglePeer(failedNode.ID, failover, true)
 		if err != nil {
+			if err.Error() == "already down" {
+				return c.NoContent(http.StatusNoContent)
+			}
 			n.Server.Logger.Errorf("fail to toggle peer: %s", err.Error())
 			return c.String(http.StatusInternalServerError, err.Error())
 		}
 
-		n.Server.Logger.Infof("%s:%s not down", failedNode.ID.String(), failedNode.Addr.String())
+		n.Server.Logger.Infof("confirmation %s:%s is down", failedNode.ID.String(), failedNode.Addr.String())
+		n.Server.Logger.Warningf("local %s:%s takes the lead", n.LocalConfig.ID.String(), n.LocalConfig.Addr.String())
 
 		return c.NoContent(http.StatusNoContent)
 	}

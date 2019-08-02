@@ -3,6 +3,7 @@ package securelink_test
 import (
 	"context"
 	"crypto/tls"
+	"fmt"
 	"reflect"
 	"testing"
 	"time"
@@ -72,23 +73,23 @@ func TestNodeFaillure5To3Nodes(t *testing.T) {
 
 	s0 := servers[0]
 	defer s0.Close()
-	s0.Logger.SetLevel(logrus.ErrorLevel)
+	s0.Logger.SetLevel(logrus.FatalLevel)
 
 	s1 := servers[1]
 	defer s1.Close()
-	s1.Logger.SetLevel(logrus.ErrorLevel)
+	s1.Logger.SetLevel(logrus.FatalLevel)
 
 	s2 := servers[2]
 	defer s2.Close()
-	s2.Logger.SetLevel(logrus.ErrorLevel)
+	s2.Logger.SetLevel(logrus.FatalLevel)
 
 	s3 := servers[3]
 	defer s3.Close()
-	s3.Logger.SetLevel(logrus.ErrorLevel)
+	s3.Logger.SetLevel(logrus.FatalLevel)
 
 	s4 := servers[4]
 	defer s4.Close()
-	s4.Logger.SetLevel(logrus.TraceLevel)
+	// s4.Logger.SetLevel(logrus.TraceLevel)
 
 	config := &securelink.Peer{}
 
@@ -110,25 +111,35 @@ func TestNodeFaillure5To3Nodes(t *testing.T) {
 	time.Sleep(time.Second)
 
 	n0.AddPeer(n1.LocalConfig)
-	// time.Sleep(time.Second)
+	time.Sleep(time.Second)
 	n0.AddPeer(n2.LocalConfig)
-	// time.Sleep(time.Second)
+	time.Sleep(time.Second)
 	n0.AddPeer(n3.LocalConfig)
-	// time.Sleep(time.Second)
+	time.Sleep(time.Second)
 	n0.AddPeer(n4.LocalConfig)
-	// time.Sleep(time.Second)
+	time.Sleep(time.Second)
 
 	time.Sleep(time.Second * 3)
 
-	// n3.EchoServer.Close()
 	s3.Close()
+	fmt.Println("close 1")
 
-	time.Sleep(time.Second * 15)
+	time.Sleep(time.Second * 10)
 
-	// n0.EchoServer.Close()
 	s0.Close()
+	fmt.Println("close 2")
 
-	time.Sleep(time.Second * 30)
+	time.Sleep(time.Second * 10)
+
+	s1.Close()
+	fmt.Println("close 3")
+
+	time.Sleep(time.Second * 10)
+
+	s2.Close()
+	fmt.Println("close 4")
+
+	time.Sleep(time.Second * 10)
 }
 
 func TestNodeToken(t *testing.T) {

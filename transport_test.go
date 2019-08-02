@@ -22,7 +22,7 @@ func initServers(ctx context.Context, n, portOffset int) (ca *securelink.Certifi
 		conf = securelink.NewDefaultCertificationConfig()
 		conf.IsCA = true
 		cert, _ := ca.NewCert(conf)
-		server,_ := securelink.NewServer(ctx, 3160+uint16(i)+uint16(portOffset), securelink.GetBaseTLSConfig(fmt.Sprint(i), cert), cert)
+		server, _ := securelink.NewServer(ctx, 3160+uint16(i)+uint16(portOffset), securelink.GetBaseTLSConfig(fmt.Sprint(i), cert), cert)
 
 		if testing.Verbose() {
 			server.Logger.SetLevel(logrus.TraceLevel)

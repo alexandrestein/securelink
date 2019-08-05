@@ -452,3 +452,30 @@ func (n *Node) IsMaster() bool {
 	}
 	return false
 }
+
+func (n *Node) GetPeers() []*Peer {
+	n.lock.RLock()
+	defer n.lock.RUnlock()
+
+	peers := make([]*Peer, len(n.clusterMap.Peers))
+	for i, peer := range n.clusterMap.Peers {
+		peerCp := new(Peer)
+		*peerCp = *peer
+		peers[i] = peerCp
+	}
+
+	return peers
+}
+
+func (n *Node) GetActivePeers() []*Peer {
+	allPeers := n.GetPeers()
+
+	peers := make([]*Peer, 0)
+	for _, peer := range allPeers {
+		if peer.Priority > 0 {
+			peers = append(peers, peer)
+		}
+	}
+
+	return peers
+}

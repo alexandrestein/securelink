@@ -105,7 +105,7 @@ func TestNodeFaillure5To3Nodes(t *testing.T) {
 	n4, _ := securelink.NewNode(s4, config)
 
 	if testing.Verbose() {
-		t.Log("master is " + n0.Server.Certificate.ID().String())
+		fmt.Println("master is " + n0.Server.Certificate.ID().String())
 	}
 
 	time.Sleep(time.Second)
@@ -122,24 +122,44 @@ func TestNodeFaillure5To3Nodes(t *testing.T) {
 	time.Sleep(time.Second * 3)
 
 	s3.Close()
-	fmt.Println("close 1")
-
-	time.Sleep(time.Second * 10)
+	if testing.Verbose() {
+		fmt.Println("close 1")
+	}
+	time.Sleep(time.Second * 3)
+	if len(n4.GetActivePeers()) != 4 {
+		t.Errorf("the numbers of active nodes %d is not what is expected %d", len(n4.GetActivePeers()), 4)
+		return
+	}
 
 	s0.Close()
-	fmt.Println("close 2")
-
-	time.Sleep(time.Second * 10)
+	if testing.Verbose() {
+		fmt.Println("close 2")
+	}
+	time.Sleep(time.Second * 3)
+	if len(n4.GetActivePeers()) != 3 {
+		t.Errorf("the numbers of active nodes %d is not what is expected %d", len(n4.GetActivePeers()), 3)
+		return
+	}
 
 	s1.Close()
-	fmt.Println("close 3")
-
-	time.Sleep(time.Second * 10)
+	if testing.Verbose() {
+		fmt.Println("close 3")
+	}
+	time.Sleep(time.Second * 3)
+	if len(n4.GetActivePeers()) != 2 {
+		t.Errorf("the numbers of active nodes %d is not what is expected %d", len(n2.GetActivePeers()), 4)
+		return
+	}
 
 	s2.Close()
-	fmt.Println("close 4")
-
-	time.Sleep(time.Second * 10)
+	if testing.Verbose() {
+		fmt.Println("close 4")
+	}
+	time.Sleep(time.Second * 3)
+	if len(n4.GetActivePeers()) != 1 {
+		t.Errorf("the numbers of active nodes %d is not what is expected %d", len(n1.GetActivePeers()), 4)
+		return
+	}
 }
 
 func TestNodeToken(t *testing.T) {
@@ -210,7 +230,7 @@ func TestNodeToken(t *testing.T) {
 			tlsConfigClone := tlsConfig.Clone()
 			tlsConfigClone.Certificates = []tls.Certificate{certFromToken.GetTLSCertificate()}
 			// var session *quic.Session
-			_, err = securelink.DialQuic(tlsConfigClone, addr.String(), time.Second)
+			_, err = securelink.DialQuic(ctx, tlsConfigClone, addr.String(), time.Second)
 			if err != nil {
 				t.Fatal(err)
 			}

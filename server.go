@@ -90,7 +90,7 @@ func NewServer(ctx context.Context, port uint16, tlsConfig *tls.Config, cert *Ce
 
 	go func() {
 		for {
-			sess, err := s.Listener.Accept()
+			sess, err := s.Listener.Accept(ctx)
 			if err != nil {
 				if err.Error() == "server closed" {
 					s.Logger.Infoln("quic listener is closed")
@@ -98,6 +98,9 @@ func NewServer(ctx context.Context, port uint16, tlsConfig *tls.Config, cert *Ce
 				}
 				continue
 			}
+			s.lock.Lock()
+			s.Sessions[sess.RemoteAddr().String()] = sess
+			s.lock.Unlock()
 			go s.handleConn(sess)
 		}
 	}()
@@ -108,8 +111,16 @@ func NewServer(ctx context.Context, port uint16, tlsConfig *tls.Config, cert *Ce
 }
 
 func (s *Server) handleConn(sess quic.Session) {
+	// Remove the session from the active session map.
+	rmSessionFn := func() {
+		s.lock.Lock()
+		delete(s.Sessions, sess.RemoteAddr().String())
+		s.lock.Unlock()
+	}
+	defer rmSessionFn()
+
 	for {
-		str, err := sess.AcceptStream()
+		str, err := sess.AcceptStream(s.ctx)
 		if err != nil {
 			if err.Error() != "NO_ERROR" {
 				s.Logger.Debugln("Accepting stream failed:", err)
@@ -223,7 +234,7 @@ func (s *Server) dial(addr string, timeout time.Duration) (quic.Session, error) 
 
 newConn:
 
-	session, err := DialQuic(s.TLSConfig, addr, timeout)
+	session, err := DialQuic(s.ctx, s.TLSConfig, addr, timeout)
 	if err != nil {
 		return nil, err
 	}
@@ -335,6 +346,7 @@ func GetBaseTLSConfig(host string, cert *Certificate) *tls.Config {
 		RootCAs:      cert.GetCertPool(),
 		ClientCAs:    cert.GetCertPool(),
 		ClientAuth:   tls.RequireAndVerifyClientCert,
+		NextProtos:   []string{"securelink"},
 	}
 }
 
@@ -350,13 +362,10 @@ func NewHTTPEchoServer(ln net.Listener) *echo.Echo {
 	return e
 }
 
-func DialQuic(tlsConfig *tls.Config, addr string, timeout time.Duration) (quic.Session, error) {
+func DialQuic(ctx context.Context, tlsConfig *tls.Config, addr string, timeout time.Duration) (quic.Session, error) {
 	tlsConfigClone := tlsConfig.Clone()
 
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
-	var quicConfig *quic.Config
+	quicConfig := new(quic.Config)
 	if timeout != 0 {
 		quicConfig = &quic.Config{
 			HandshakeTimeout: timeout,

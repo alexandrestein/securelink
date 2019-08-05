@@ -186,17 +186,18 @@ func (n *Node) AddPeer(peer *Peer) error {
 }
 
 // RemovePeer removes the given peer from the cluster
-func (n *Node) RemovePeer(peerID *big.Int) error {
+func (n *Node) RemovePeer(peer *Peer) error {
 	if !n.IsMaster() {
 		return fmt.Errorf("not master")
 	}
 
 	// Lock the node config
 	n.lock.Lock()
+	defer n.lock.Unlock()
 
 	// Found the peer from the cluster list
 	for i, existingPeer := range n.clusterMap.Peers {
-		if existingPeer.ID.Uint64() == peerID.Uint64() {
+		if existingPeer.ID.Uint64() == peer.ID.Uint64() {
 			// Remove the failed peer from the list
 			copy(n.clusterMap.Peers[i:], n.clusterMap.Peers[i+1:])
 			n.clusterMap.Peers[len(n.clusterMap.Peers)-1] = nil
@@ -207,11 +208,8 @@ func (n *Node) RemovePeer(peerID *big.Int) error {
 		}
 	}
 
-	// Set the new slucter map version
+	// Set the new cluster map version
 	n.clusterMap.Update = time.Now().Truncate(time.Millisecond)
-
-	// Lock unlock the node configuration
-	n.lock.Unlock()
 
 	// breadcast the new status
 	go n.pingPeers()
@@ -220,8 +218,8 @@ func (n *Node) RemovePeer(peerID *big.Int) error {
 }
 
 // TogglePeer change the sign of the priority to desable or enable the peer
-func (n *Node) TogglePeer(peerID *big.Int) error {
-	return n.togglePeer(peerID, false, false)
+func (n *Node) TogglePeer(peer *Peer) error {
+	return n.togglePeer(peer.ID, false, false)
 }
 
 func (n *Node) togglePeer(peerID *big.Int, skipMaster, forceDisable bool) error {
@@ -243,8 +241,10 @@ func (n *Node) togglePeer(peerID *big.Int, skipMaster, forceDisable bool) error 
 					return fmt.Errorf("already down")
 				}
 			}
+			fmt.Println("previous priority", existingPeer.Priority, n.clusterMap.Update)
 			// change the sign
 			existingPeer.Priority = -existingPeer.Priority
+			fmt.Println("new priority", existingPeer.Priority)
 
 			// Stop the list evaluation
 			break
@@ -253,6 +253,7 @@ func (n *Node) togglePeer(peerID *big.Int, skipMaster, forceDisable bool) error 
 
 	// Set the new cluster map version
 	n.clusterMap.Update = time.Now().Truncate(time.Millisecond)
+	fmt.Println("new priority", n.clusterMap.Update)
 
 	// Reorder the peers list
 	sortPeersBy(sortPeersByPriority).Sort(n.clusterMap.Peers)
@@ -263,7 +264,7 @@ func (n *Node) togglePeer(peerID *big.Int, skipMaster, forceDisable bool) error 
 	return nil
 }
 
-func (n *Node) ChangePeerPriority(peerID *big.Int, newPriority float32) error {
+func (n *Node) ChangePeerPriority(peer *Peer, newPriority float32) error {
 	if !n.IsMaster() {
 		return fmt.Errorf("not master")
 	}
@@ -273,7 +274,7 @@ func (n *Node) ChangePeerPriority(peerID *big.Int, newPriority float32) error {
 
 	// Found the peer from the cluster list
 	for _, existingPeer := range n.clusterMap.Peers {
-		if existingPeer.ID.Uint64() == peerID.Uint64() {
+		if existingPeer.ID.Uint64() == peer.ID.Uint64() {
 			// change the sign
 			existingPeer.Priority = newPriority
 
@@ -309,9 +310,10 @@ func (n *Node) pingPeers() {
 	master := n.getMaster()
 
 	n.lock.RLock()
-	defer n.lock.RUnlock()
+	mp := new(clusterMap)
+	*mp = *n.clusterMap
+	n.lock.RUnlock()
 
-	mp := n.clusterMap
 	pStruct := &ping{
 		Time:   mp.Update,
 		Master: master.ID,
@@ -358,7 +360,7 @@ func (n *Node) pingPeers() {
 		}
 	}
 
-	for _, peer := range n.clusterMap.Peers {
+	for _, peer := range mp.Peers {
 		// If local
 		if peer.ID.Uint64() == n.LocalConfig.ID.Uint64() {
 			continue
@@ -405,7 +407,8 @@ func (n *Node) pingPeers() {
 		// Other node has an other config.
 		// A call is made to get the new status from master
 		if prStruct.Time.After(mp.Update) {
-			n.Server.Logger.Infof("remote node %s:%s is in the future check", peer.ID.String(), peer.Addr.String())
+			fmt.Println("future", prStruct.Time, mp.Update)
+			n.Server.Logger.Infof("remote node %s:%s is in the future", peer.ID.String(), peer.Addr.String())
 			go n.getUpdate(prStruct.Master)
 		}
 	}
@@ -413,13 +416,31 @@ func (n *Node) pingPeers() {
 
 func (n *Node) checkPeers() {
 	ticker := time.NewTicker(time.Second * 2)
+	defer ticker.Stop()
+
+	quiteFn := func() {
+		err := n.Server.ctx.Err()
+		if err == nil {
+			err = fmt.Errorf("no error")
+		}
+
+		n.Server.Logger.Infof("the server context is done: %s", err.Error())
+		n.EchoServer.Close()
+	}
+
 	for {
+		// ticker := time.After(time.Second * 2)
+		if !n.checkPeerAlive(n.LocalConfig) {
+			quiteFn()
+			return
+		}
+
 		select {
+		// case <-ticker:
 		case <-ticker.C:
 			go n.pingPeers()
 		case <-n.Server.Ctx().Done():
-			n.Server.Logger.Infof("the server context is done: %s", n.Server.ctx.Err().Error())
-			n.EchoServer.Close()
+			quiteFn()
 			return
 		}
 	}

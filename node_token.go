@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/json"
+	"fmt"
 	"io"
 	"time"
 
@@ -20,6 +21,10 @@ type (
 
 // GetToken returns a string representation of a temporary token (10 minutes validity)
 func (n *Node) GetToken() (string, error) {
+	if !n.IsMaster() {
+		return "", fmt.Errorf("not master")
+	}
+
 	certConfig := NewDefaultCertificationConfigWithDefaultTemplate("TOKEN")
 	certConfig.LifeTime = time.Minute * 5
 	tmpCert, err := n.Server.Certificate.NewCert(certConfig)

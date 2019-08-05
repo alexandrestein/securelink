@@ -63,7 +63,7 @@ func TestStart3Nodes(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	time.Sleep(time.Second * 30)
+	time.Sleep(time.Second * 10)
 }
 
 func TestNodeFaillure5To3Nodes(t *testing.T) {
@@ -125,7 +125,7 @@ func TestNodeFaillure5To3Nodes(t *testing.T) {
 	if testing.Verbose() {
 		fmt.Println("close 1")
 	}
-	time.Sleep(time.Second * 3)
+	time.Sleep(time.Second * 10)
 	if len(n4.GetActivePeers()) != 4 {
 		t.Errorf("the numbers of active nodes %d is not what is expected %d", len(n4.GetActivePeers()), 4)
 		return
@@ -135,7 +135,7 @@ func TestNodeFaillure5To3Nodes(t *testing.T) {
 	if testing.Verbose() {
 		fmt.Println("close 2")
 	}
-	time.Sleep(time.Second * 3)
+	time.Sleep(time.Second * 10)
 	if len(n4.GetActivePeers()) != 3 {
 		t.Errorf("the numbers of active nodes %d is not what is expected %d", len(n4.GetActivePeers()), 3)
 		return
@@ -145,7 +145,7 @@ func TestNodeFaillure5To3Nodes(t *testing.T) {
 	if testing.Verbose() {
 		fmt.Println("close 3")
 	}
-	time.Sleep(time.Second * 3)
+	time.Sleep(time.Second * 10)
 	if len(n4.GetActivePeers()) != 2 {
 		t.Errorf("the numbers of active nodes %d is not what is expected %d", len(n2.GetActivePeers()), 4)
 		return
@@ -155,11 +155,95 @@ func TestNodeFaillure5To3Nodes(t *testing.T) {
 	if testing.Verbose() {
 		fmt.Println("close 4")
 	}
-	time.Sleep(time.Second * 3)
+	time.Sleep(time.Second * 10)
 	if len(n4.GetActivePeers()) != 1 {
 		t.Errorf("the numbers of active nodes %d is not what is expected %d", len(n1.GetActivePeers()), 4)
 		return
 	}
+
+	time.Sleep(time.Second * 5)
+}
+
+func TestNodeAddRemove(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	_, servers := initServers(ctx, 5, 0)
+
+	s0 := servers[0]
+	defer s0.Close()
+	s0.Logger.SetLevel(logrus.FatalLevel)
+
+	s1 := servers[1]
+	defer s1.Close()
+	s1.Logger.SetLevel(logrus.FatalLevel)
+
+	s2 := servers[2]
+	defer s2.Close()
+	s2.Logger.SetLevel(logrus.FatalLevel)
+
+	s3 := servers[3]
+	defer s3.Close()
+	s3.Logger.SetLevel(logrus.FatalLevel)
+
+	s4 := servers[4]
+	defer s4.Close()
+	// s4.Logger.SetLevel(logrus.TraceLevel)
+
+	config := &securelink.Peer{}
+
+	config.Priority = 0.9
+	n0, _ := securelink.NewNode(s0, config)
+	config.Priority = 0.5
+	n1, _ := securelink.NewNode(s1, config)
+	config.Priority = 0.2
+	n2, _ := securelink.NewNode(s2, config)
+	config.Priority = 0.55
+	n3, _ := securelink.NewNode(s3, config)
+	config.Priority = 0.56
+	n4, _ := securelink.NewNode(s4, config)
+
+	time.Sleep(time.Second)
+
+	n0.AddPeer(n1.LocalConfig)
+	time.Sleep(time.Second)
+	n0.AddPeer(n2.LocalConfig)
+	time.Sleep(time.Second)
+	n0.AddPeer(n3.LocalConfig)
+	time.Sleep(time.Second)
+	n0.AddPeer(n4.LocalConfig)
+	time.Sleep(time.Second)
+
+	fmt.Println("toggle")
+	err := n0.TogglePeer(n0.LocalConfig)
+	if err != nil {
+		t.Errorf(err.Error())
+		return
+	}
+	time.Sleep(time.Second * 10)
+	fmt.Println("RM")
+	err = n4.RemovePeer(n0.LocalConfig)
+	if err != nil {
+		t.Errorf(err.Error())
+		return
+	}
+	time.Sleep(time.Second * 3)
+	if len(n4.GetActivePeers()) != 4 {
+		t.Errorf("the numbers of active nodes %d is not what is expected %d", len(n4.GetActivePeers()), 4)
+		return
+	}
+
+	// err = n0.RemovePeer(n0.LocalConfig)
+	// if err != nil {
+	// 	t.Errorf(err.Error())
+	// 	return
+	// }
+	// time.Sleep(time.Second * 3)
+	// if len(n4.GetActivePeers()) != 4 {
+	// 	t.Errorf("the numbers of active nodes %d is not what is expected %d", len(n4.GetActivePeers()), 4)
+	// 	return
+	// }
+
+	time.Sleep(time.Second * 15)
 }
 
 func TestNodeToken(t *testing.T) {

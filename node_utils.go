@@ -50,6 +50,14 @@ func (n *Node) checkPeerAlive(peer *Peer) bool {
 		return false
 	}
 
+	nbTry := 0
+
+tryAgain:
+	if nbTry >= 5 {
+		return false
+	}
+	nbTry++
+
 	master := n.getMaster()
 
 	cli := n.GetClient()
@@ -68,8 +76,9 @@ func (n *Node) checkPeerAlive(peer *Peer) bool {
 	alive := false
 	resp, err := cli.Post(n.buildURL(peer, "/ping"), "application/json", buff)
 	if err != nil {
-		n.Server.Logger.Infof("*Node.checkPeerAlive node %s-%s did not reply to ping: %s", peer.ID.String(), peer.Addr.String(), err.Error())
-		return false
+		n.Server.Logger.Infof("*Node.checkPeerAlive node %s-%s did not reply to ping %d: %s", peer.ID.String(), peer.Addr.String(), nbTry, err.Error())
+		time.Sleep(time.Second)
+		goto tryAgain
 	}
 
 	if resp.StatusCode != http.StatusOK {

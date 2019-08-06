@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/hashicorp/memberlist"
 	"github.com/labstack/echo"
 	"github.com/lucas-clemente/quic-go"
 	"golang.org/x/crypto/blake2b"
@@ -38,6 +39,8 @@ type (
 		ctx context.Context
 
 		Sessions map[string]quic.Session
+
+		Memberlist *memberlist.Memberlist
 
 		lock *sync.RWMutex
 	}

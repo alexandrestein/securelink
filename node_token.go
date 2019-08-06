@@ -19,16 +19,16 @@ type (
 )
 
 // GetToken returns a string representation of a temporary token (10 minutes validity)
-func (n *Node) GetToken() (string, error) {
+func (n *Server) GetToken() (string, error) {
 	certConfig := NewDefaultCertificationConfigWithDefaultTemplate("TOKEN")
 	certConfig.LifeTime = time.Minute * 5
-	tmpCert, err := n.Server.Certificate.NewCert(certConfig)
+	tmpCert, err := n.Certificate.NewCert(certConfig)
 	if err != nil {
 		return "", err
 	}
 
 	tokenObj := &token{
-		A: n.Server.AddrStruct,
+		A: n.AddrStruct,
 		C: tmpCert.Marshal(),
 	}
 

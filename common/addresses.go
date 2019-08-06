@@ -54,6 +54,28 @@ func (a *Addr) IP() net.IP {
 	return net.ParseIP(a.MainAddr)
 }
 
+func (a *Addr) IPsV4() (ret []string) {
+	ret = []string{}
+	for _, ipStr := range a.Addrs {
+		ip := net.ParseIP(ipStr)
+		if ip.To4() != nil {
+			ret = append(ret, ipStr)
+		}
+	}
+	return
+}
+
+func (a *Addr) IPsV6() (ret []string) {
+	ret = []string{}
+	for _, ipStr := range a.Addrs {
+		ip := net.ParseIP(ipStr)
+		if ip.To16() != nil {
+			ret = append(ret, ipStr)
+		}
+	}
+	return
+}
+
 func GetAddresses() ([]string, error) {
 	interfaces, err := net.Interfaces()
 	if err != nil {

@@ -2,6 +2,10 @@ module github.com/alexandrestein/securelink
 
 go 1.13
 
+replace github.com/hashicorp/memberlist => /home/alexandre/go/src/github.com/hashicorp/memberlist
+
+replace github.com/lucas-clemente/quic-go => /home/alexandre/go/src/github.com/lucas-clemente/quic-go
+
 require (
 	ekyu.moe/base91 v0.2.3 // indirect
 	github.com/Equim-chan/base91-go v0.2.3

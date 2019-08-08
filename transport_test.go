@@ -11,6 +11,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/alexandrestein/securelink"
+	"github.com/alexandrestein/securelink/common"
 )
 
 func initServers(ctx context.Context, n, portOffset int) (ca *securelink.Certificate, servers []*securelink.Server) {
@@ -98,7 +99,8 @@ func TestServerAndClosedListener(t *testing.T) {
 	time.Sleep(time.Millisecond * 100)
 
 	// Try on open listener
-	conn, err := s1.Dial("localhost:3160", serviceName, time.Second)
+	addr, _ := common.AddrStringToType("localhost:3160")
+	conn, err := s1.Dial(addr, serviceName, time.Second)
 	if err != nil {
 		t.Error(err)
 		return
@@ -155,7 +157,7 @@ func TestServerAndClosedListener(t *testing.T) {
 	time.Sleep(time.Millisecond * 100)
 
 	// Try on a closed listener
-	conn, err = s1.Dial("localhost:3160", serviceName, time.Second)
+	conn, err = s1.Dial(addr, serviceName, time.Second)
 	if err != nil {
 		t.Error(err)
 		return
@@ -203,7 +205,8 @@ func TestServerBadCertificates(t *testing.T) {
 
 	time.Sleep(time.Millisecond * 100)
 
-	_, err := s1.Dial("localhost:3160", serviceName, time.Second)
+	addr, _ := common.AddrStringToType("localhost:3160")
+	_, err := s1.Dial(addr, serviceName, time.Second)
 	if err == nil {
 		t.Errorf("dial must return an error because the certificate authority in not the same")
 		return

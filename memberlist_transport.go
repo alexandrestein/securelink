@@ -7,6 +7,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/alexandrestein/securelink/common"
 	"github.com/armon/go-metrics"
 	"github.com/hashicorp/memberlist"
 	"github.com/sirupsen/logrus"
@@ -64,11 +65,15 @@ func (s *Server) StartMemberlist(config *memberlist.Config) error {
 	if err != nil {
 		return err
 	}
-
 	config.Transport = tr
 
-	var mb *memberlist.Memberlist
-	mb, err = memberlist.Create(config)
+	// config.BindAddr = "127.0.0.1"
+	// config.BindPort = int(s.AddrStruct.Port) + 10
+	// config.AdvertiseAddr = "127.0.0.1"
+	// config.AdvertisePort = int(s.AddrStruct.Port) + 10
+
+	// var mb *memberlist.Memberlist
+	mb, err := memberlist.Create(config)
 	if err != nil {
 		return err
 	}
@@ -143,16 +148,20 @@ func (t *netTransport) WriteTo(b []byte, addr string) (time.Time, error) {
 	// packet sending interface on the first one. Take the time after the
 	// write call comes back, which will underestimate the time a little,
 	// but help account for any delays before the write occurs.
-	conn, err := t.server.Dial(addr, udpServiceName, quicTimeout)
+	addrInt, err := common.AddrStringToType(addr)
 	if err != nil {
-		// fmt.Println("conn.Write(b) err", err)
-		return time.Now(), err
+		return time.Time{}, err
 	}
 
-	// fmt.Println("conn.Write(b)", string(b))
+	var conn net.Conn
+	conn, err = t.server.Dial(addrInt, udpServiceName, quicTimeout)
+	if err != nil {
+		return time.Time{}, err
+	}
+
 	_, err = conn.Write(b)
 	if err != nil {
-		return time.Now(), err
+		return time.Time{}, err
 	}
 
 	return time.Now(), err
@@ -165,7 +174,17 @@ func (t *netTransport) PacketCh() <-chan *memberlist.Packet {
 
 // See Transport.
 func (t *netTransport) DialTimeout(addr string, timeout time.Duration) (net.Conn, error) {
-	return t.server.Dial(addr, tcpServiceName, timeout)
+	addrInt, err := common.AddrStringToType(addr)
+	if err != nil {
+		return nil, err
+	}
+
+	conn, err := t.server.Dial(addrInt, tcpServiceName, timeout)
+	if err != nil {
+		return nil, err
+	}
+
+	return conn, nil
 }
 
 // See Transport.
@@ -226,6 +245,8 @@ func (t *netTransport) tcpListen(ln net.Listener) {
 
 		t.streamCh <- conn
 
+		// fmt.Println("tcp in", conn.LocalAddr().String())
+
 		// server, client := net.Pipe()
 		// defer server.Close()
 		// defer client.Close()
@@ -257,10 +278,10 @@ func (t *netTransport) udpListen(ln net.Listener) {
 			t.logger.Printf("[ERR] memberlist: Error reading UDP packet: %v", err)
 			continue
 		}
+
+		addr := conn.RemoteAddr()
 		var n int
 		n, err = conn.Read(buf)
-		addr := conn.RemoteAddr()
-		// n, addr, err := udpLn.ReadFrom(buf)
 		ts := time.Now()
 		if err != nil {
 			if s := atomic.LoadInt32(&t.shutdown); s == 1 {
@@ -286,20 +307,6 @@ func (t *netTransport) udpListen(ln net.Listener) {
 			From:      addr,
 			Timestamp: ts,
 		}
+		// fmt.Println("udp in", ts, conn.LocalAddr().String())
 	}
 }
-
-// // setUDPRecvBuf is used to resize the UDP receive window. The function
-// // attempts to set the read buffer to `udpRecvBuf` but backs off until
-// // the read buffer can be set.
-// func setUDPRecvBuf(c *net.UDPConn) error {
-// 	size := udpRecvBufSize
-// 	var err error
-// 	for size > 0 {
-// 		if err = c.SetReadBuffer(size); err == nil {
-// 			return nil
-// 		}
-// 		size = size / 2
-// 	}
-// 	return err
-// }

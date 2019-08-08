@@ -3,6 +3,7 @@ package common
 import (
 	"fmt"
 	"net"
+	"strconv"
 )
 
 type (
@@ -101,7 +102,7 @@ func GetAddresses() ([]string, error) {
 			ipAsString = ip.String()
 			ip2 := net.ParseIP(ipAsString)
 			if to4 := ip2.To4(); to4 == nil {
-				ipAsString = "[" + ipAsString + "]"
+				ipAsString = ipAsString
 			}
 
 			// If ip accessible from outside
@@ -112,4 +113,22 @@ func GetAddresses() ([]string, error) {
 	}
 
 	return ret, nil
+}
+
+func AddrStringToType(addrStr string) (net.Addr, error) {
+	hostStr, portStr, err := net.SplitHostPort(addrStr)
+	if err != nil {
+		return nil, err
+	}
+
+	var portInt uint64
+	portInt, err = strconv.ParseUint(portStr, 10, 16)
+
+	addr := &Addr{
+		MainAddr: hostStr,
+		Addrs:    []string{hostStr},
+		Port:     uint16(portInt),
+	}
+
+	return addr, nil
 }

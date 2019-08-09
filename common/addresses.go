@@ -3,14 +3,16 @@ package common
 import (
 	"fmt"
 	"net"
-	"strconv"
+	"sync"
 )
 
 type (
 	Addr struct {
-		MainAddr string
-		Port     uint16
-		Addrs    []string
+		lock sync.RWMutex
+
+		mainAddr string
+		port     uint16
+		addrs    []string
 	}
 )
 
@@ -25,39 +27,76 @@ func NewAddr(port uint16) (*Addr, error) {
 	}
 
 	return &Addr{
-		MainAddr: addrs[0],
-		Port:     port,
-		Addrs:    addrs,
+		lock:     sync.RWMutex{},
+		mainAddr: addrs[0],
+		port:     port,
+		addrs:    addrs,
 	}, nil
 }
 
 func (a *Addr) SwitchMain(i int) string {
-	if i > len(a.Addrs)-1 {
+	a.lock.Lock()
+	defer a.lock.Unlock()
+
+	if i > len(a.addrs)-1 {
 		return ""
 	}
-	a.MainAddr = a.Addrs[i]
+	a.mainAddr = a.addrs[i]
 	return a.String()
 }
 
 func (a *Addr) String() string {
-	return fmt.Sprintf("%s:%d", a.MainAddr, a.Port)
+	a.lock.RLock()
+	defer a.lock.RUnlock()
+
+	return fmt.Sprintf("%s:%d", a.mainAddr, a.port)
+}
+
+func (a *Addr) MainAddr() string {
+	a.lock.RLock()
+	defer a.lock.RUnlock()
+
+	return a.mainAddr
 }
 
 func (a *Addr) Network() string {
-	return "tcp"
+	return "udp"
+}
+
+func (a *Addr) Port() int {
+	a.lock.RLock()
+	defer a.lock.RUnlock()
+
+	return int(a.port)
+}
+
+func (a *Addr) Addrs() []string {
+	a.lock.RLock()
+	defer a.lock.RUnlock()
+
+	return a.addrs
 }
 
 func (a *Addr) ForListenerBroadcast() string {
+	a.lock.RLock()
+	defer a.lock.RUnlock()
+
 	return fmt.Sprintf(":%d", a.Port)
 }
 
 func (a *Addr) IP() net.IP {
-	return net.ParseIP(a.MainAddr)
+	a.lock.RLock()
+	defer a.lock.RUnlock()
+
+	return net.ParseIP(a.mainAddr)
 }
 
 func (a *Addr) IPsV4() (ret []string) {
+	a.lock.RLock()
+	defer a.lock.RUnlock()
+
 	ret = []string{}
-	for _, ipStr := range a.Addrs {
+	for _, ipStr := range a.addrs {
 		ip := net.ParseIP(ipStr)
 		if ip.To4() != nil {
 			ret = append(ret, ipStr)
@@ -67,14 +106,26 @@ func (a *Addr) IPsV4() (ret []string) {
 }
 
 func (a *Addr) IPsV6() (ret []string) {
+	a.lock.RLock()
+	defer a.lock.RUnlock()
+
 	ret = []string{}
-	for _, ipStr := range a.Addrs {
+	for _, ipStr := range a.addrs {
 		ip := net.ParseIP(ipStr)
 		if ip.To16() != nil {
 			ret = append(ret, ipStr)
 		}
 	}
 	return
+}
+
+func (a *Addr) UDPAddr() (*net.UDPAddr, error) {
+	return net.ResolveUDPAddr("udp", a.String())
+}
+
+func (a *Addr) MustUDPAddr() *net.UDPAddr {
+	udpAddr, _ := a.UDPAddr()
+	return udpAddr
 }
 
 func GetAddresses() ([]string, error) {
@@ -113,22 +164,4 @@ func GetAddresses() ([]string, error) {
 	}
 
 	return ret, nil
-}
-
-func AddrStringToType(addrStr string) (net.Addr, error) {
-	hostStr, portStr, err := net.SplitHostPort(addrStr)
-	if err != nil {
-		return nil, err
-	}
-
-	var portInt uint64
-	portInt, err = strconv.ParseUint(portStr, 10, 16)
-
-	addr := &Addr{
-		MainAddr: hostStr,
-		Addrs:    []string{hostStr},
-		Port:     uint16(portInt),
-	}
-
-	return addr, nil
 }

@@ -7,40 +7,17 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/alexandrestein/securelink/common"
 	"github.com/armon/go-metrics"
 	"github.com/hashicorp/memberlist"
 	"github.com/sirupsen/logrus"
 )
 
 const (
-	// udpPacketBufSize is used to buffer incoming packets during read
-	// operations.
-	// udpPacketBufSize = 65536
-
-	// udpRecvBufSize is a large buffer size that we attempt to set UDP
-	// sockets to in order to handle a large volume of messages.
-	// udpRecvBufSize = 2 * 1024 * 1024
-
 	tcpServiceName    = "TCP memberlist"
 	udpServiceName    = "UDP memberlist"
 	quicPacketBufSize = 2 * 1024 * 1024
 	quicTimeout       = 1 * time.Second
 )
-
-// // netTransportConfig is used to configure a net transport.
-// type netTransportConfig struct {
-// 	Addr common.Addr
-// 	// // BindAddrs is a list of addresses to bind to for both TCP and UDP
-// 	// // communications.
-// 	// BindAddrs []string
-
-// 	// // BindPort is the port to listen on, for each address above.
-// 	// BindPort int
-
-// 	// Logger is a logger for operator messages.
-// 	Logger *log.Logger
-// }
 
 // netTransport is a Transport implementation that uses connectionless UDP for
 // packet operations, and ad-hoc TCP connections for stream operations.
@@ -67,12 +44,13 @@ func (s *Server) StartMemberlist(config *memberlist.Config) error {
 	}
 	config.Transport = tr
 
-	// config.BindAddr = "127.0.0.1"
-	// config.BindPort = int(s.AddrStruct.Port) + 10
-	// config.AdvertiseAddr = "127.0.0.1"
-	// config.AdvertisePort = int(s.AddrStruct.Port) + 10
+	config.BindAddr = s.AddrStruct.MainAddr()
+	config.BindPort = int(s.AddrStruct.Port())
+	config.AdvertiseAddr = s.AddrStruct.MainAddr()
+	config.AdvertisePort = int(s.AddrStruct.Port())
 
-	// var mb *memberlist.Memberlist
+	config.EnableCompression = true
+
 	mb, err := memberlist.Create(config)
 	if err != nil {
 		return err
@@ -97,7 +75,6 @@ func newNetTransport(server *Server) (*netTransport, error) {
 
 	// Build out the new transport.
 	t := netTransport{
-		// config:   config,
 		packetCh:    make(chan *memberlist.Packet),
 		streamCh:    make(chan net.Conn),
 		logger:      server.Logger,
@@ -107,13 +84,9 @@ func newNetTransport(server *Server) (*netTransport, error) {
 	}
 
 	// Fire up now that we've been able to create it.
-	// t.wg.Add(1)
 	t.wg.Add(2)
-	// t.wg.Add(1)
 	go t.tcpListen(tcpLn)
 	go t.udpListen(udpLn)
-
-	// t.wg.Wait()
 
 	return &t, nil
 }
@@ -123,7 +96,7 @@ func newNetTransport(server *Server) (*netTransport, error) {
 func (t *netTransport) GetAutoBindPort() int {
 	// We made sure there's at least one TCP listener, and that one's
 	// port was applied to all the others for the dynamic bind case.
-	return int(t.server.AddrStruct.Port)
+	return int(t.server.AddrStruct.Port())
 }
 
 // See Transport.
@@ -131,7 +104,7 @@ func (t *netTransport) FinalAdvertiseAddr(ip string, port int) (net.IP, int, err
 	var advertiseAddr net.IP
 	var advertisePort int
 
-	advertiseAddr = net.ParseIP(t.server.AddrStruct.MainAddr)
+	advertiseAddr = net.ParseIP(t.server.AddrStruct.MainAddr())
 	if advertiseAddr == nil {
 		return nil, 0, fmt.Errorf("Failed to parse advertise address: %q", ip)
 	}
@@ -148,13 +121,13 @@ func (t *netTransport) WriteTo(b []byte, addr string) (time.Time, error) {
 	// packet sending interface on the first one. Take the time after the
 	// write call comes back, which will underestimate the time a little,
 	// but help account for any delays before the write occurs.
-	addrInt, err := common.AddrStringToType(addr)
+	udpAddr, err := net.ResolveUDPAddr("udp", addr)
 	if err != nil {
 		return time.Time{}, err
 	}
 
 	var conn net.Conn
-	conn, err = t.server.Dial(addrInt, udpServiceName, quicTimeout)
+	conn, err = t.server.Dial(udpAddr, udpServiceName, quicTimeout)
 	if err != nil {
 		return time.Time{}, err
 	}
@@ -174,13 +147,14 @@ func (t *netTransport) PacketCh() <-chan *memberlist.Packet {
 
 // See Transport.
 func (t *netTransport) DialTimeout(addr string, timeout time.Duration) (net.Conn, error) {
-	addrInt, err := common.AddrStringToType(addr)
+	udpAddr, err := net.ResolveUDPAddr("udp", addr)
 	if err != nil {
 		return nil, err
 	}
 
-	conn, err := t.server.Dial(addrInt, tcpServiceName, timeout)
+	conn, err := t.server.Dial(udpAddr, tcpServiceName, timeout)
 	if err != nil {
+		fmt.Println("dial err", err)
 		return nil, err
 	}
 
@@ -244,20 +218,6 @@ func (t *netTransport) tcpListen(ln net.Listener) {
 		loopDelay = 0
 
 		t.streamCh <- conn
-
-		// fmt.Println("tcp in", conn.LocalAddr().String())
-
-		// server, client := net.Pipe()
-		// defer server.Close()
-		// defer client.Close()
-
-		// buf := make([]byte, 1024*1024*2)
-		// n, err := conn.Read(buf)
-		// fmt.Println("n, err", n, err)
-		// fmt.Println("buf", string(buf))
-		// client.Write(buf)
-
-		// t.streamCh <- server
 	}
 }
 
@@ -307,6 +267,5 @@ func (t *netTransport) udpListen(ln net.Listener) {
 			From:      addr,
 			Timestamp: ts,
 		}
-		// fmt.Println("udp in", ts, conn.LocalAddr().String())
 	}
 }

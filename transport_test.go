@@ -90,7 +90,7 @@ func TestServerAndClosedListener(t *testing.T) {
 	defer s1.Close()
 
 	serviceName := "echo service"
-	listener, _ := s0.NewListener(serviceName)
+	listener, err := s0.NewListener(serviceName)
 	defer listener.Close()
 
 	go echoFn(ctx, t, listener)
@@ -98,7 +98,7 @@ func TestServerAndClosedListener(t *testing.T) {
 	time.Sleep(time.Millisecond * 100)
 
 	// Try on open listener
-	conn, err := s1.Dial("localhost:3160", serviceName, time.Second)
+	conn, err := s1.Dial(s0.AddrStruct.MustUDPAddr(), serviceName, time.Second)
 	if err != nil {
 		t.Error(err)
 		return
@@ -155,7 +155,7 @@ func TestServerAndClosedListener(t *testing.T) {
 	time.Sleep(time.Millisecond * 100)
 
 	// Try on a closed listener
-	conn, err = s1.Dial("localhost:3160", serviceName, time.Second)
+	conn, err = s1.Dial(s0.AddrStruct.MustUDPAddr(), serviceName, time.Second)
 	if err != nil {
 		t.Error(err)
 		return
@@ -203,7 +203,8 @@ func TestServerBadCertificates(t *testing.T) {
 
 	time.Sleep(time.Millisecond * 100)
 
-	_, err := s1.Dial("localhost:3160", serviceName, time.Second)
+	addr, _ := net.ResolveUDPAddr("udp", "localhost:3160")
+	_, err := s1.Dial(addr, serviceName, time.Second)
 	if err == nil {
 		t.Errorf("dial must return an error because the certificate authority in not the same")
 		return

@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/hashicorp/memberlist"
 	"github.com/labstack/echo"
 	"github.com/lucas-clemente/quic-go"
 	"golang.org/x/crypto/blake2b"
@@ -27,17 +28,21 @@ type (
 	// Server provides a good way to have many services on a single open port.
 	// Regester services which are specified with a tls host name prefix.
 	Server struct {
-		AddrStruct  *common.Addr
-		Listener    quic.Listener
-		Certificate *Certificate
-		TLSConfig   *tls.Config
-		Listeners   map[string]*localListener
+		AddrStruct       *common.Addr
+		Listeners        []quic.Listener
+		packetConns      []net.PacketConn
+		Certificate      *Certificate
+		TLSConfig        *tls.Config
+		ServiceListeners map[string]*localListener
 
 		Logger *logrus.Logger
 
 		ctx context.Context
 
-		Sessions map[string]quic.Session
+		incomingSessions map[string]quic.Session
+		outgoinSessions  map[string]quic.Session
+
+		Memberlist *memberlist.Memberlist
 
 		lock *sync.RWMutex
 	}
@@ -65,59 +70,86 @@ func NewServer(ctx context.Context, port uint16, tlsConfig *tls.Config, cert *Ce
 		KeepAlive: true,
 	}
 
-	var quicListener quic.Listener
-	quicListener, err = quic.ListenAddr(addr.ForListenerBroadcast(), tlsConfig, quicConfig)
-
-	if err != nil {
-		return nil, err
-	}
-
 	s := &Server{
-		AddrStruct:  addr,
-		Listener:    quicListener,
-		Certificate: cert,
-		TLSConfig:   tlsConfig,
-		Listeners:   make(map[string]*localListener),
+		AddrStruct:       addr,
+		Certificate:      cert,
+		TLSConfig:        tlsConfig,
+		ServiceListeners: make(map[string]*localListener),
 
 		Logger: logger,
 
 		ctx: ctx,
 
-		Sessions: make(map[string]quic.Session),
+		incomingSessions: make(map[string]quic.Session),
+		outgoinSessions:  make(map[string]quic.Session),
 
 		lock: &sync.RWMutex{},
 	}
 
-	go func() {
-		for {
-			sess, err := s.Listener.Accept(ctx)
-			if err != nil {
-				if err.Error() == "server closed" {
-					s.Logger.Infoln("quic listener is closed")
-					return
-				}
-				continue
-			}
-			s.lock.Lock()
-			s.Sessions[sess.RemoteAddr().String()] = sess
-			s.lock.Unlock()
-			go s.handleConn(sess)
-		}
-	}()
+	var ok bool
 
-	s.Logger.Infof("server started on port %d", addr.Port)
+	// Clean up listeners if there's an error.
+	defer func() {
+		if !ok {
+			for i := range s.Listeners {
+				go s.Listeners[i].Close()
+				go s.packetConns[i].Close()
+			}
+		}
+	}() // Build all the QUIC listeners.
+	for _, addr := range addr.Addrs() {
+		ip := net.ParseIP(addr)
+		udpAddr := &net.UDPAddr{IP: ip, Port: int(port)}
+		udpConn, err := net.ListenUDP("udp", udpAddr)
+		if err != nil {
+			return nil, err
+		}
+
+		var quicListener quic.Listener
+		quicListener, err = quic.Listen(udpConn, tlsConfig, quicConfig)
+		if err != nil {
+			return nil, err
+		}
+
+		s.Listeners = append(s.Listeners, quicListener)
+		s.packetConns = append(s.packetConns, udpConn)
+
+		// Fire them up now that we've been able to create them all.
+		go func() {
+			for {
+				sess, err := quicListener.Accept(ctx)
+				if err != nil {
+					if err.Error() == "server closed" {
+						s.Logger.Debugf("quic listener %s is closed", ip)
+						return
+					}
+					continue
+				}
+				s.lock.Lock()
+				s.incomingSessions[sess.RemoteAddr().String()] = sess
+				s.lock.Unlock()
+				go s.handleConn(sess, true)
+			}
+		}()
+	}
+
+	ok = true
+
+	s.Logger.Infof("server started on port %d", addr.Port())
 
 	return s, nil
 }
 
-func (s *Server) handleConn(sess quic.Session) {
-	// Remove the session from the active session map.
-	rmSessionFn := func() {
-		s.lock.Lock()
-		delete(s.Sessions, sess.RemoteAddr().String())
-		s.lock.Unlock()
+func (s *Server) handleConn(sess quic.Session, incoming bool) {
+	if incoming {
+		// Remove the session from the active session map.
+		rmSessionFn := func() {
+			s.lock.Lock()
+			delete(s.incomingSessions, sess.RemoteAddr().String())
+			s.lock.Unlock()
+		}
+		defer rmSessionFn()
 	}
-	defer rmSessionFn()
 
 	for {
 		str, err := sess.AcceptStream(s.ctx)
@@ -138,7 +170,7 @@ func (s *Server) handleConn(sess quic.Session) {
 		}
 
 		s.lock.RLock()
-		listener := s.Listeners[target]
+		listener := s.ServiceListeners[target]
 		s.lock.RUnlock()
 		if listener == nil {
 			s.Logger.Debugf("target listener %s is nil", target)
@@ -175,21 +207,30 @@ func (s *Server) getTarget(str quic.Stream) (string, error) {
 }
 
 // Close implements the net.Listener interface
-func (s *Server) Close() error {
+func (s *Server) Close() {
 	s.lock.RLock()
 	defer s.lock.RUnlock()
-	for _, listener := range s.Listeners {
+	for _, listener := range s.ServiceListeners {
 		go listener.Close()
 	}
-	for _, session := range s.Sessions {
+	for _, session := range s.incomingSessions {
 		go session.Close()
 	}
+	for _, session := range s.outgoinSessions {
+		go session.Close()
+	}
+	for _, ln := range s.Listeners {
+		ln.Close()
+	}
+	for _, pc := range s.packetConns {
+		pc.Close()
+	}
 
-	return s.Listener.Close()
+	return
 }
 
 // Dial is used to connect to on other server and set a prefix to access specific registered service
-func (s *Server) Dial(addr, serviceName string, timeout time.Duration) (net.Conn, error) {
+func (s *Server) Dial(addr *net.UDPAddr, serviceName string, timeout time.Duration) (net.Conn, error) {
 	session, err := s.dial(addr, timeout)
 	if err != nil {
 		return nil, err
@@ -224,32 +265,44 @@ func (s *Server) Dial(addr, serviceName string, timeout time.Duration) (net.Conn
 	return conn, nil
 }
 
-func (s *Server) dial(addr string, timeout time.Duration) (quic.Session, error) {
+func (s *Server) dial(addr *net.UDPAddr, timeout time.Duration) (session quic.Session, err error) {
 	s.lock.RLock()
-	session := s.Sessions[addr]
+	session = s.outgoinSessions[addr.String()]
 	s.lock.RUnlock()
 	if session != nil {
 		return session, nil
 	}
 
 newConn:
+	s.lock.RLock()
+	session = s.incomingSessions[addr.String()]
+	s.lock.RUnlock()
+	if session != nil {
+		goto checkOutgoingSession
+	}
 
-	session, err := DialQuic(s.ctx, s.TLSConfig, addr, timeout)
+	session, err = s.dialQuic(s.ctx, s.TLSConfig, addr, "", timeout)
 	if err != nil {
 		return nil, err
 	}
 
+	// If the remote peer use this session to send packets
+	go s.handleConn(session, false)
+
 	s.lock.Lock()
-	s.Sessions[addr] = session
+	s.outgoinSessions[addr.String()] = session
 	s.lock.Unlock()
 
 	go func() {
 		<-session.Context().Done()
 		s.lock.Lock()
-		delete(s.Sessions, addr)
+		delete(s.outgoinSessions, addr.String())
 		s.lock.Unlock()
 	}()
 
+checkOutgoingSession:
+
+	// Check if the context contain any error
 	err = session.Context().Err()
 	if err != nil {
 		session = nil
@@ -271,7 +324,7 @@ func (s *Server) NewListener(name string) (net.Listener, error) {
 	key := hash.Sum(nil)
 	keyAsString := hex.EncodeToString(key)
 
-	existingListener := s.Listeners[keyAsString]
+	existingListener := s.ServiceListeners[keyAsString]
 	if existingListener != nil {
 		return nil, fmt.Errorf("a listener with the same name is already registered")
 	}
@@ -282,7 +335,7 @@ func (s *Server) NewListener(name string) (net.Listener, error) {
 		connChan: make(chan net.Conn, 32),
 	}
 
-	s.Listeners[keyAsString] = ll
+	s.ServiceListeners[keyAsString] = ll
 
 	return ll, nil
 }
@@ -329,12 +382,12 @@ func (ll *localListener) Close() error {
 
 	listenerKeyAsHex := hex.EncodeToString(listenerKey)
 
-	delete(ll.server.Listeners, listenerKeyAsHex)
+	delete(ll.server.ServiceListeners, listenerKeyAsHex)
 	return nil
 }
 
 func (ll *localListener) Addr() net.Addr {
-	return ll.server.Listener.Addr()
+	return ll.server.Listeners[0].Addr()
 }
 
 // GetBaseTLSConfig returns a TLS configuration with the given certificate as
@@ -362,7 +415,7 @@ func NewHTTPEchoServer(ln net.Listener) *echo.Echo {
 	return e
 }
 
-func DialQuic(ctx context.Context, tlsConfig *tls.Config, addr string, timeout time.Duration) (quic.Session, error) {
+func (s *Server) dialQuic(ctx context.Context, tlsConfig *tls.Config, addr *net.UDPAddr, hostname string, timeout time.Duration) (quic.Session, error) {
 	tlsConfigClone := tlsConfig.Clone()
 
 	quicConfig := new(quic.Config)
@@ -372,5 +425,10 @@ func DialQuic(ctx context.Context, tlsConfig *tls.Config, addr string, timeout t
 		}
 	}
 
-	return quic.DialAddrContext(ctx, addr, tlsConfigClone, quicConfig)
+	sess, err := quic.DialContext(ctx, s.packetConns[0], addr, hostname, tlsConfigClone, quicConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	return sess, nil
 }

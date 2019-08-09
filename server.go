@@ -128,7 +128,7 @@ func NewServer(ctx context.Context, port uint16, tlsConfig *tls.Config, cert *Ce
 				s.lock.Lock()
 				s.incomingSessions[sess.RemoteAddr().String()] = sess
 				s.lock.Unlock()
-				go s.handleConn(sess)
+				go s.handleConn(sess, true)
 			}
 		}()
 	}
@@ -140,14 +140,16 @@ func NewServer(ctx context.Context, port uint16, tlsConfig *tls.Config, cert *Ce
 	return s, nil
 }
 
-func (s *Server) handleConn(sess quic.Session) {
-	// Remove the session from the active session map.
-	rmSessionFn := func() {
-		s.lock.Lock()
-		delete(s.incomingSessions, sess.RemoteAddr().String())
-		s.lock.Unlock()
+func (s *Server) handleConn(sess quic.Session, incoming bool) {
+	if incoming {
+		// Remove the session from the active session map.
+		rmSessionFn := func() {
+			s.lock.Lock()
+			delete(s.incomingSessions, sess.RemoteAddr().String())
+			s.lock.Unlock()
+		}
+		defer rmSessionFn()
 	}
-	defer rmSessionFn()
 
 	for {
 		str, err := sess.AcceptStream(s.ctx)
@@ -263,20 +265,29 @@ func (s *Server) Dial(addr *net.UDPAddr, serviceName string, timeout time.Durati
 	return conn, nil
 }
 
-func (s *Server) dial(addr *net.UDPAddr, timeout time.Duration) (quic.Session, error) {
+func (s *Server) dial(addr *net.UDPAddr, timeout time.Duration) (session quic.Session, err error) {
 	s.lock.RLock()
-	session := s.outgoinSessions[addr.String()]
+	session = s.outgoinSessions[addr.String()]
 	s.lock.RUnlock()
 	if session != nil {
 		return session, nil
 	}
 
 newConn:
+	s.lock.RLock()
+	session = s.incomingSessions[addr.String()]
+	s.lock.RUnlock()
+	if session != nil {
+		goto checkOutgoingSession
+	}
 
-	session, err := s.dialQuic(s.ctx, s.TLSConfig, addr, "", timeout)
+	session, err = s.dialQuic(s.ctx, s.TLSConfig, addr, "", timeout)
 	if err != nil {
 		return nil, err
 	}
+
+	// If the remote peer use this session to send packets
+	go s.handleConn(session, false)
 
 	s.lock.Lock()
 	s.outgoinSessions[addr.String()] = session
@@ -289,6 +300,9 @@ newConn:
 		s.lock.Unlock()
 	}()
 
+checkOutgoingSession:
+
+	// Check if the context contain any error
 	err = session.Context().Err()
 	if err != nil {
 		session = nil
